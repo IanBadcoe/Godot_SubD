@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using Godot;
 
 using EIdx = SubD.Idx<SubD.Edge>;
@@ -21,16 +22,16 @@ namespace SubD
         // (and vert, and maybe poly) would be a pain, so let's instead have a "Freeze" operation at the end of construction
         bool Frozen = false;
 
-        public List<EIdx> EIdsxInner = new List<EIdx>();
+        public List<EIdx> EIdxsInner = new List<EIdx>();
         public IEnumerable<EIdx> EIdxs
         {
-            get => EIdsxInner;
+            get => EIdxsInner;
         }
 
-        public List<PIdx> PIdsxInner = new List<PIdx>();
+        public List<PIdx> PIdxsInner = new List<PIdx>();
         public IEnumerable<PIdx> PIdxs
         {
-            get => PIdsxInner;
+            get => PIdxsInner;
         }
 
         public void AddEIdx(EIdx e_idx)
@@ -42,7 +43,7 @@ namespace SubD
                 throw new InvalidOperationException();
             }
 
-            EIdsxInner.Add(e_idx);
+            EIdxsInner.Add(e_idx);
         }
 
         public void AddPIdx(PIdx p_idx)
@@ -54,7 +55,7 @@ namespace SubD
                 throw new InvalidOperationException();
             }
 
-            PIdsxInner.Add(p_idx);
+            PIdxsInner.Add(p_idx);
         }
 
         public void Freeze()
@@ -65,6 +66,12 @@ namespace SubD
         public Vert(Vector3 pos)
         {
             Position = pos;
+        }
+
+        public Vert(Vector3 pos, IEnumerable<EIdx> e_idxs, IEnumerable<PIdx> p_idxs) : this(pos)
+        {
+            EIdxsInner = e_idxs.ToList();
+            PIdxsInner = p_idxs.ToList();
         }
 
         public static bool operator==(Vert lhs, Vert rhs)
@@ -106,7 +113,7 @@ namespace SubD
                 throw new InvalidOperationException();
             }
 
-            PIdsxInner.Remove(p_idx);
+            PIdxsInner.Remove(p_idx);
         }
 
         public void RemoveEdge(EIdx e_idx)
@@ -116,7 +123,17 @@ namespace SubD
                 throw new InvalidOperationException();
             }
 
-            EIdsxInner.Remove(e_idx);
+            EIdxsInner.Remove(e_idx);
+        }
+
+        public Vert Clone(bool position_only)
+        {
+            if (position_only)
+            {
+                return new Vert(Position);
+            }
+
+            return new Vert(Position, EIdxs, PIdxs);
         }
     }
 }

@@ -43,6 +43,8 @@ namespace SubD
             private set;
         }
 
+        public Vector3 EdgeMidpoint(EIdx e_idx) => EdgeVerts(e_idx).Select(x => x.Position).Aggregate(Vector3.Zero, (x, y) => x + y) / 2;
+
         public Surface(
             BidirectionalDictionary<VIdx, Vert> verts,
             BidirectionalDictionary<EIdx, Edge> edges,
@@ -93,7 +95,6 @@ namespace SubD
                     Debug.Assert(poly.EIdxs.Contains(pair.Key));
                 }
             }
-
 
             foreach(var pair in polys)
             {
