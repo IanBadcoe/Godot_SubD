@@ -21,7 +21,17 @@ namespace SubD
             private set;
         }
 
-        // "left" adjoining poly, if there is one, in the Start->End direction viewed from "outside"
+        // ideally we would be a const object, but construction is quite spread out in time and having a separate "builder" version of this
+        // (and vert, and maybe poly) would be a pain, so let's instead have a "Freeze" operation at the end of construction
+        bool Frozen = false;
+
+        public void Freeze()
+        {
+            Frozen = true;
+        }
+
+        // left and right adjoining polys, if there are any, in the Start->End direction viewed from "outside"
+        // (this means that the "right" poly uses this edge in the "forwards" direction)
 
         PIdx? LeftInner;
         public PIdx? Left
@@ -32,6 +42,11 @@ namespace SubD
             }
             set
             {
+                if (Frozen)
+                {
+                    throw new InvalidOperationException();
+                }
+
                 // we do not expect to always have this, but if we do, we expect to set it once and not change it
                 // (could add ability to null it here, if that becomes an issue)
                 Debug.Assert(LeftInner == null);
@@ -49,6 +64,11 @@ namespace SubD
             }
             set
             {
+                if (Frozen)
+                {
+                    throw new InvalidOperationException();
+                }
+
                 // we do not expect to always have this, but if we do, we expect to set it once and not change it
                 // (could add ability to null it here, if that becomes an issue)
                 Debug.Assert(RightInner == null);
@@ -66,7 +86,7 @@ namespace SubD
             }
         }
 
-        public IEnumerable<PIdx> Polys
+        public IEnumerable<PIdx> PIdxs
         {
             get
             {

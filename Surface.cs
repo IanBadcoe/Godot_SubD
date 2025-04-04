@@ -47,6 +47,69 @@ namespace SubD
             BidirectionalDictionary<EIdx, Edge> edges,
             BidirectionalDictionary<PIdx, Poly> polys)
         {
+            // allow no more changes
+            foreach(Vert vert in verts.Values)
+            {
+                vert.Freeze();
+            }
+
+            foreach(Edge edge in edges.Values)
+            {
+                edge.Freeze();
+            }
+
+            // poly is immutable anyway
+
+            // debug-only topology validation
+
+#if DEBUG
+            foreach(var pair in verts)
+            {
+                // all verts which reference an edge should be referenced by the edge
+                foreach(Edge edge in pair.Value.EIdxs.Select(x => edges[x]))
+                {
+                    Debug.Assert(edge.VIdxs.Contains(pair.Key));
+                }
+
+                // all verts which reference a poly should be referenced by the poly
+                foreach(Poly poly in pair.Value.PIdxs.Select(x => polys[x]))
+                {
+                    Debug.Assert(poly.VIdxs.Contains(pair.Key));
+                }
+            }
+
+            foreach(var pair in edges)
+            {
+                // all edges which reference a vert should be referenced by the vert
+                foreach(Vert vert in pair.Value.VIdxs.Select(x => verts[x]))
+                {
+                    Debug.Assert(vert.EIdxs.Contains(pair.Key));
+                }
+
+                // all edges which reference a poly should be referenced by the poly
+                foreach(Poly poly in pair.Value.PIdxs.Select(x => polys[x]))
+                {
+                    Debug.Assert(poly.EIdxs.Contains(pair.Key));
+                }
+            }
+
+
+            foreach(var pair in polys)
+            {
+                // all polys which reference a vert should be referenced by the vert
+                foreach(Vert vert in pair.Value.VIdxs.Select(x => verts[x]))
+                {
+                    Debug.Assert(vert.PIdxs.Contains(pair.Key));
+                }
+
+                // all polys which reference an edge should be referenced by the edge
+                foreach(Edge edge in pair.Value.EIdxs.Select(x => edges[x]))
+                {
+                    Debug.Assert(edge.PIdxs.Contains(pair.Key));
+                }
+            }
+#endif
+
             Verts = verts;
             Edges = edges;
             Polys = polys;

@@ -132,10 +132,13 @@ namespace SubD
                             EIdx e_idx = new EIdx(edges.Count);
 
                             edges[edge] = e_idx;
-                            edges[e_idx] = edge;
                             face_edges.Add(e_idx);
                             // store the real dictionary member for setting its "Right" later
                             right_edges.Add(edge);
+
+                            // it's a new edge, so let the two verts know
+                            verts[edge.Start].AddEIdx(e_idx);
+                            verts[edge.End].AddEIdx(e_idx);
                         }
 
                         prev_v_idx = v_idx;
@@ -146,6 +149,11 @@ namespace SubD
                     PIdx p_idx = new(polys.Count);
                     polys[poly] = p_idx;
 
+                    // it's a new poly, so let all the verts know
+                    foreach(Vert vert in poly.VIdxs.Select(x => verts[x]))
+                    {
+                        vert.AddPIdx(p_idx);
+                    }
 
                     // forward edges will have the new face on their right
                     // backward ones on the left...
@@ -158,14 +166,8 @@ namespace SubD
                     {
                         edge.Right = p_idx;
                     }
-
-                    foreach(Edge edge in right_edges.Concat(left_edges))
-                    {
-
-                    }
                 }
             }
-
             return new Surface(verts, edges, polys);
         }
 
