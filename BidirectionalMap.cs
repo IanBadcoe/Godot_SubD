@@ -1,10 +1,12 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 
 namespace SubD
 {
-    // only a rather noddy implementation with just the few fearures I need
+    // only a rather noddy implementation with just the few features I need
+    [DebuggerDisplay("{Forwards.Count} {ReverseInner.Count}")]
     public class BidirectionalDictionary<T1, T2> : IEnumerable<KeyValuePair<T1, T2>>
     {
         Dictionary<T1, T2> Forwards = new Dictionary<T1, T2>();
@@ -38,6 +40,24 @@ namespace SubD
         {
             Forwards[t1] = t2;
             ReverseInner[t2] = t1;
+        }
+
+        public T2 Remove(T1 t1)
+        {
+            T2 t2 = Forwards[t1];
+            Forwards.Remove(t1);
+            ReverseInner.Remove(t2);
+
+            return t2;
+        }
+
+        public T1 Remove(T2 t2)
+        {
+            T1 t1 = ReverseInner[t2];
+            ReverseInner.Remove(t2);
+            Forwards.Remove(t1);
+
+            return t1;
         }
 
         public bool Contains(T1 key)

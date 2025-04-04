@@ -21,7 +21,14 @@ namespace SubD
             private set;
         }
 
-        public Poly(IEnumerable<VIdx> v_idxs, IEnumerable<EIdx> e_idxs)
+        static public IEnumerable<VIdx> StandardiseVIdxOrder(IEnumerable<VIdx> v_idxs)
+        {
+            int dummy;
+
+            return StandardiseVIdxOrder(v_idxs, out dummy);
+        }
+
+        static public IEnumerable<VIdx> StandardiseVIdxOrder(IEnumerable<VIdx> v_idxs, out int where)
         {
             // rotete-permute verts and edges into a standard order so we can compare
             // polys from different sources
@@ -30,13 +37,22 @@ namespace SubD
 
             VIdx min = temp_vs.Min();
 
-            int where_lowest = Array.IndexOf(temp_vs, min);
+            where = Array.IndexOf(temp_vs, min);
 
-            VIdxs = temp_vs.Skip(where_lowest).Concat(temp_vs.Take(where_lowest)).ToArray();
+            return temp_vs.Skip(where).Concat(temp_vs.Take(where));
+        }
+
+        public Poly(IEnumerable<VIdx> v_idxs, IEnumerable<EIdx> e_idxs)
+        {
+            // rotete-permute verts and edges into a standard order so we can compare
+            // polys from different sources
+            int where;
+            VIdxs = StandardiseVIdxOrder(v_idxs, out where).ToArray();
 
             var temp_es = e_idxs.ToArray();
 
-            EIdxs =  temp_es.Skip(where_lowest).Concat(temp_es.Take(where_lowest)).ToArray();
+            // permute the edges the same, to preserve the relationship
+            EIdxs =  temp_es.Skip(where).Concat(temp_es.Take(where)).ToArray();
         }
 
         public static bool operator==(Poly lhs, Poly rhs)

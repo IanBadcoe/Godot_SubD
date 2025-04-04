@@ -120,7 +120,36 @@ namespace SubD
 
             Debug.Assert(vert == End);
 
-            return End;
+            return Start;
+        }
+
+        public PIdx? OtherPoly(PIdx poly)
+        {
+            if (poly == Left)
+            {
+                return Right;
+            }
+
+            Debug.Assert(poly == Right);
+
+            return Left;
+        }
+
+        public void RemovePoly(PIdx p_idx)
+        {
+            if (Frozen)
+            {
+                throw new InvalidOperationException();
+            }
+
+            if (p_idx == Left)
+            {
+                LeftInner = null;
+            }
+            else if (p_idx == Right)
+            {
+                RightInner = null;
+            }
         }
 
         public Edge Reversed()

@@ -6,6 +6,7 @@ using VIdx = SubD.Idx<SubD.Vert>;
 using PIdx = SubD.Idx<SubD.Poly>;
 using Godot;
 using System.Diagnostics;
+using System.Linq.Expressions;
 
 namespace SubD
 {
@@ -119,9 +120,18 @@ namespace SubD
         {
             ArrayMesh mesh = new ArrayMesh();
 
+            Dictionary<VIdx, int> vert_remap = new Dictionary<VIdx, int>();
+            int next_vert_idx = 0;
+
+            // some verts can have been deleted, so we need to make the indices contiguous again
+            foreach(VIdx v_idx in Verts.Keys)
+            {
+                vert_remap[v_idx] = next_vert_idx++;
+            }
+
             Vector3[] verts = Verts.OrderBy(x => x.Key).Select(x => x.Value.Position).ToArray();
 
-            List<VIdx> idxs = new List<VIdx>();
+            List<int> idxs = new List<int>();
 
             // split our polys apart into individual triangles
             foreach(var p_idx in Polys.Keys)
@@ -130,16 +140,16 @@ namespace SubD
 
                 for(int p = 1; p < v_idxs.Length - 1; p++)
                 {
-                    idxs.Add(v_idxs[0]);
-                    idxs.Add(v_idxs[p]);
-                    idxs.Add(v_idxs[p + 1]);
+                    idxs.Add(vert_remap[v_idxs[0]]);
+                    idxs.Add(vert_remap[v_idxs[p]]);
+                    idxs.Add(vert_remap[v_idxs[p + 1]]);
                 }
             }
 
             var arrays = new Godot.Collections.Array();
             arrays.Resize((int)Mesh.ArrayType.Max);
             arrays[(int)Mesh.ArrayType.Vertex] = verts;
-            arrays[(int)Mesh.ArrayType.Index] = idxs.Select(x => x.Value).ToArray();
+            arrays[(int)Mesh.ArrayType.Index] = idxs.ToArray();
 
             // Create the Mesh.
             mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);

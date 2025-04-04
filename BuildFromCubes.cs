@@ -14,6 +14,10 @@ namespace SubD
     [DebuggerDisplay("Count = {Cubes.Count}")]
     public class BuildFromCubes
     {
+        static int NextVertIdx = 0;
+        static int NextEdgeIdx = 0;
+        static int NextPolyIdx = 0;
+
         public struct IdxCube
         {
             public VIdx[] VertIdxs
@@ -71,6 +75,10 @@ namespace SubD
 
         Dictionary<Vector3I, int> Cubes = new Dictionary<Vector3I, int>();
 
+        BidirectionalDictionary<VIdx, Vert> Verts = new BidirectionalDictionary<VIdx, Vert>();
+        BidirectionalDictionary<EIdx, Edge> Edges = new BidirectionalDictionary<EIdx, Edge>();
+        BidirectionalDictionary<PIdx, Poly> Polys = new BidirectionalDictionary<PIdx, Poly>();
+
         public void SetCube(Vector3I position, int group = 0)
         {
             Cubes[position] = group;
@@ -83,28 +91,37 @@ namespace SubD
 
         public Surface ToSurface()
         {
-            BidirectionalDictionary<VIdx, Vert> verts = new BidirectionalDictionary<VIdx, Vert>();
-
             List<IdxCube> idx_cubes = new List<IdxCube>();
 
             foreach(var pair in Cubes)
             {
-                idx_cubes.Add(new IdxCube(CubeToIdxVerts(verts, pair.Key), pair.Value));
+                idx_cubes.Add(new IdxCube(CubeToIdxVerts(pair.Key), pair.Value));
             }
-
-            BidirectionalDictionary<EIdx, Edge> edges = new BidirectionalDictionary<EIdx, Edge>();
-
-            BidirectionalDictionary<PIdx, Poly> polys = new BidirectionalDictionary<PIdx, Poly>();
 
             foreach(var cube in idx_cubes)
             {
+                List<VIdx[]> real_faces = new List<VIdx[]>();
+
+                // if any face is the negative of some other face, then instead of adding this one, we need to remove the other
+                // so that the two cubes join
+                //
+                // and we need to do that first, because edges can only have one Left or Right, and we might add a new
+                // face that wants to take an edge from an old one
                 foreach(int[] locally_indexed_face in FaceIdxs)
+                {
+                    VIdx[] globally_indexed_face = locally_indexed_face.Select(x => cube.VertIdxs[x]).ToArray();
+
+                    if (!ResolveOppositeFaces(globally_indexed_face))
+                    {
+                        real_faces.Add(globally_indexed_face);
+                    }
+                }
+
+                foreach(VIdx[] globally_indexed_face in real_faces)
                 {
                     List<EIdx> face_edges = new List<EIdx>();
                     List<Edge> left_edges = new List<Edge>();
                     List<Edge> right_edges = new List<Edge>();
-
-                    VIdx[] globally_indexed_face = locally_indexed_face.Select(x => cube.VertIdxs[x]).ToArray();
 
                     VIdx prev_v_idx = globally_indexed_face.Last();
 
@@ -113,32 +130,35 @@ namespace SubD
                         Edge edge = new Edge(prev_v_idx, v_idx);
                         Edge r_edge = edge.Reversed();
 
-                        if (edges.Contains(edge))
+                        if (Edges.Contains(edge))
                         {
-                            // shouldn't ever happen, because the first time we see the edge we should add it forwards
-                            // (second clause following) and the second time we see it we should want to use it backwards
-                            // (next clause)
-                            Debug.Assert(false);
-                        }
-                        else if (edges.Contains(r_edge))
-                        {
-                            EIdx e_idx = edges[r_edge];
+                            // this can only happen, if we had a face using this edge already, in this direction, and subsequently removed it
+                            // because otherwise, we see each edge exactly twice, first time forwards (second following clause)
+                            // second time backwards (next clause)
+                            EIdx e_idx = Edges[edge];
                             face_edges.Add(e_idx);
                             // store the real dictionary member for setting its "Left" later
-                            left_edges.Add(edges[e_idx]);
+                            right_edges.Add(Edges[e_idx]);
+                        }
+                        else if (Edges.Contains(r_edge))
+                        {
+                            EIdx e_idx = Edges[r_edge];
+                            face_edges.Add(e_idx);
+                            // store the real dictionary member for setting its "Left" later
+                            left_edges.Add(Edges[e_idx]);
                         }
                         else
                         {
-                            EIdx e_idx = new EIdx(edges.Count);
+                            EIdx e_idx = new EIdx(NextEdgeIdx++);
 
-                            edges[edge] = e_idx;
+                            Edges[edge] = e_idx;
                             face_edges.Add(e_idx);
                             // store the real dictionary member for setting its "Right" later
                             right_edges.Add(edge);
 
                             // it's a new edge, so let the two verts know
-                            verts[edge.Start].AddEIdx(e_idx);
-                            verts[edge.End].AddEIdx(e_idx);
+                            Verts[edge.Start].AddEIdx(e_idx);
+                            Verts[edge.End].AddEIdx(e_idx);
                         }
 
                         prev_v_idx = v_idx;
@@ -146,11 +166,11 @@ namespace SubD
 
                     Poly poly = new Poly(globally_indexed_face, face_edges);
 
-                    PIdx p_idx = new(polys.Count);
-                    polys[poly] = p_idx;
+                    PIdx p_idx = new(NextPolyIdx++);
+                    Polys[poly] = p_idx;
 
                     // it's a new poly, so let all the verts know
-                    foreach(Vert vert in poly.VIdxs.Select(x => verts[x]))
+                    foreach(Vert vert in poly.VIdxs.Select(x => Verts[x]))
                     {
                         vert.AddPIdx(p_idx);
                     }
@@ -168,22 +188,96 @@ namespace SubD
                     }
                 }
             }
-            return new Surface(verts, edges, polys);
+
+            return new Surface(Verts, Edges, Polys);
         }
 
-        IEnumerable<VIdx> CubeToIdxVerts(BidirectionalDictionary<VIdx, Vert> known_verts, Vector3I position)
+        private bool ResolveOppositeFaces(VIdx[] v_idxs)
+        {
+            VIdx[] v_r_temp = Poly.StandardiseVIdxOrder(v_idxs.Reverse()).ToArray();
+
+#if DEBUG
+            VIdx[] v_temp = Poly.StandardiseVIdxOrder(v_idxs).ToArray();;
+#endif
+
+            foreach(var pair in Polys)
+            {
+#if DEBUG
+                // we should *never* find the same face come up twice the same way around
+                Debug.Assert(!pair.Value.VIdxs.SequenceEqual(v_temp));
+#endif
+
+                // if we see the reverse of an existing face, they cancel...
+                if (pair.Value.VIdxs.SequenceEqual(v_r_temp))
+                {
+                    RemovePoly(pair.Key);
+
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void RemovePoly(PIdx p_idx)
+        {
+            Poly poly = Polys.Remove(p_idx);
+
+            List<Tuple<EIdx, Edge>> removed_edges = new List<Tuple<EIdx, Edge>>();
+
+            foreach(Edge edge in poly.EIdxs.Select(x => Edges[x]))
+            {
+                Debug.Assert(edge.PIdxs.Contains(p_idx));
+
+                edge.RemovePoly(p_idx);
+
+                if (!edge.PIdxs.Any())
+                {
+                    EIdx e_idx = Edges[edge];
+
+                    Edges.Remove(edge);
+
+                    removed_edges.Add(new Tuple<EIdx, Edge>(e_idx, edge));
+                }
+            }
+
+            foreach(Vert vert in poly.VIdxs.Select(x => Verts[x]))
+            {
+                vert.RemovePoly(p_idx);
+            }
+
+            foreach(var pair in removed_edges)
+            {
+                foreach(Vert vert in pair.Item2.VIdxs.Select(x => Verts[x]))
+                {
+                    Debug.Assert(vert.EIdxs.Contains(pair.Item1));
+
+                    vert.RemoveEdge(pair.Item1);
+
+                    if (!vert.EIdxs.Any())
+                    {
+                        // vert realy should become empty of edges and polys at the same time...
+                        Debug.Assert(!vert.PIdxs.Any());
+
+                        Verts.Remove(vert);
+                    }
+                }
+            }
+        }
+
+        IEnumerable<VIdx> CubeToIdxVerts(Vector3I position)
         {
             foreach(var offset in VertOffsets)
             {
                 Vector3 pos = (Vector3)position + offset;
                 Vert vert = new Vert(pos);
 
-                if (!known_verts.Contains(vert))
+                if (!Verts.Contains(vert))
                 {
-                    known_verts[vert] = new VIdx(known_verts.Count);
+                    Verts[vert] = new VIdx(NextVertIdx++);
                 }
 
-                yield return known_verts[vert];
+                yield return Verts[vert];
             }
         }
     }

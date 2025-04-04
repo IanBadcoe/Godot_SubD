@@ -98,5 +98,25 @@ namespace SubD
         {
             return Position.GetHashCode();
         }
+
+        public void RemovePoly(PIdx p_idx)
+        {
+            if (Frozen)
+            {
+                throw new InvalidOperationException();
+            }
+
+            PIdsxInner.Remove(p_idx);
+        }
+
+        public void RemoveEdge(EIdx e_idx)
+        {
+            if (Frozen)
+            {
+                throw new InvalidOperationException();
+            }
+
+            EIdsxInner.Remove(e_idx);
+        }
     }
 }
