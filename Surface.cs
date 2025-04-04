@@ -1,0 +1,87 @@
+using System.Collections.Generic;
+using System.Linq;
+
+using EIdx = SubD.Idx<SubD.Edge>;
+using VIdx = SubD.Idx<SubD.Vert>;
+using PIdx = SubD.Idx<SubD.Poly>;
+using Godot;
+using System.Diagnostics;
+
+namespace SubD
+{
+    [DebuggerDisplay("Verts = Vert.Count, Edges = Edge.Count, Faces = Face.Count")]
+    public class Surface
+    {
+        public BidirectionalDictionary<PIdx, Poly> Polys
+        {
+            get;
+            private set;
+        }
+
+        public IEnumerable<VIdx> PolyVIdxs(PIdx p_idx) => Polys[p_idx].VIdxs;
+
+        public IEnumerable<Vert> PolyVerts(PIdx p_idx) => PolyVIdxs(p_idx).Select(x => Verts[x]);
+
+        public IEnumerable<EIdx> PolyEIdxs(PIdx p_idx) => Polys[p_idx].EIdxs;
+
+        public IEnumerable<Edge> PolyEdges(PIdx p_idx) => PolyEIdxs(p_idx).Select(x => Edges[x]);
+
+        public BidirectionalDictionary<EIdx, Edge> Edges
+        {
+            get;
+            private set;
+        }
+
+        public IEnumerable<VIdx> EdgeVIdxs(EIdx e_idx) => Edges[e_idx].VIdxs;
+
+        public IEnumerable<Vert> EdgeVerts(EIdx e_idx) => Edges[e_idx].VIdxs.Select(x => Verts[x]);
+
+        public BidirectionalDictionary<VIdx, Vert> Verts
+        {
+            get;
+            private set;
+        }
+
+        public Surface(
+            BidirectionalDictionary<VIdx, Vert> verts,
+            BidirectionalDictionary<EIdx, Edge> edges,
+            BidirectionalDictionary<PIdx, Poly> polys)
+        {
+            Verts = verts;
+            Edges = edges;
+            Polys = polys;
+        }
+
+        public Mesh ToMesh()
+        {
+            ArrayMesh mesh = new ArrayMesh();
+
+            Vector3[] verts = Verts.OrderBy(x => x.Key).Select(x => x.Value.Position).ToArray();
+
+            List<VIdx> idxs = new List<VIdx>();
+
+            // split our polys apart into individual triangles
+            foreach(var p_idx in Polys.Keys)
+            {
+                VIdx[] v_idxs = PolyVIdxs(p_idx).ToArray();
+
+                for(int p = 1; p < v_idxs.Length - 1; p++)
+                {
+                    idxs.Add(v_idxs[0]);
+                    idxs.Add(v_idxs[p]);
+                    idxs.Add(v_idxs[p + 1]);
+                }
+            }
+
+            var arrays = new Godot.Collections.Array();
+            arrays.Resize((int)Mesh.ArrayType.Max);
+            arrays[(int)Mesh.ArrayType.Vertex] = verts;
+            arrays[(int)Mesh.ArrayType.Index] = idxs.Select(x => x.Value).ToArray();
+
+            // Create the Mesh.
+            mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+
+            return mesh;
+        }
+    }
+}

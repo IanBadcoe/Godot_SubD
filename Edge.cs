@@ -1,0 +1,143 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using PIdx = SubD.Idx<SubD.Poly>;
+using VIdx = SubD.Idx<SubD.Vert>;
+
+namespace SubD
+{
+    [DebuggerDisplay("{Start}->{End} Left: {SubD.Idx<SubD.Poly>.Idx2String(Left)} Right: {SubD.Idx<SubD.Poly>.Idx2String(Right)}")]
+    public class Edge
+    {
+        public VIdx Start
+        {
+            get;
+            private set;
+        }
+
+        public VIdx End
+        {
+            get;
+            private set;
+        }
+
+        // "left" adjoining poly, if there is one, in the Start->End direction viewed from "outside"
+
+        PIdx? LeftInner;
+        public PIdx? Left
+        {
+            get
+            {
+                return LeftInner;
+            }
+            set
+            {
+                // we do not expect to always have this, but if we do, we expect to set it once and not change it
+                // (could add ability to null it here, if that becomes an issue)
+                Debug.Assert(LeftInner == null);
+
+                LeftInner = value;
+            }
+        }
+
+        PIdx? RightInner;
+        public PIdx? Right
+        {
+            get
+            {
+                return RightInner;
+            }
+            set
+            {
+                // we do not expect to always have this, but if we do, we expect to set it once and not change it
+                // (could add ability to null it here, if that becomes an issue)
+                Debug.Assert(RightInner == null);
+
+                RightInner = value;
+            }
+        }
+
+        public IEnumerable<VIdx> VIdxs
+        {
+            get
+            {
+                yield return Start;
+                yield return End;
+            }
+        }
+
+        public IEnumerable<PIdx> Polys
+        {
+            get
+            {
+                if (Left.HasValue)
+                {
+                    yield return Left.Value;
+                }
+
+                if (Right.HasValue)
+                {
+                    yield return Right.Value;
+                }
+            }
+        }
+
+        public Edge(VIdx start, VIdx end, PIdx? left = null, PIdx? right = null)
+        {
+            Start = start;
+            End = end;
+
+            Left = left;
+            Right = right;
+        }
+
+        public VIdx? OtherVert(VIdx vert)
+        {
+            if (vert == Start)
+            {
+                return End;
+            }
+
+            Debug.Assert(vert == End);
+
+            return End;
+        }
+
+        public Edge Reversed()
+        {
+            return new Edge(End, Start, Right, Left);
+        }
+
+        public static bool operator==(Edge lhs, Edge rhs)
+        {
+            if (ReferenceEquals(lhs, rhs))
+            {
+                return true;
+            }
+
+            if (ReferenceEquals(lhs, null) || ReferenceEquals(rhs, null))
+            {
+                return false;
+            }
+
+            return lhs.Start == rhs.Start && lhs.End == rhs.End;
+        }
+
+        public static bool operator!=(Edge lhs, Edge rhs)
+        {
+            return !(lhs == rhs);
+        }
+
+        public override bool Equals(object obj)
+        {
+            var edge = obj as Edge;
+
+            return this == edge;
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(Start.GetHashCode(), End.GetHashCode());
+        }
+    }
+}
