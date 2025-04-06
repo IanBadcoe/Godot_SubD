@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Godot;
 
 using VIdx = SubD.Idx<SubD.Vert>;
 using EIdx = SubD.Idx<SubD.Edge>;
@@ -19,6 +20,13 @@ namespace SubD
         {
             get;
             private set;
+        }
+
+        // a place to cache it when calculated by the Surface
+        public Vector3? Normal
+        {
+            get;
+            set;
         }
 
         static public IEnumerable<VIdx> StandardiseVIdxOrder(IEnumerable<VIdx> v_idxs)
@@ -84,7 +92,7 @@ namespace SubD
 
         public override int GetHashCode()
         {
-            return VIdxs.Aggregate(0, (x, y) => HashCode.Combine(x.GetHashCode(), y.GetHashCode()));
+            return VIdxs.Aggregate(0, (x, y) => HashCode.Combine(x, y.GetHashCode()));
         }
     }
 }

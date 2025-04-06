@@ -23,15 +23,27 @@ namespace SubD
         bool Frozen = false;
 
         public List<EIdx> EIdxsInner = new List<EIdx>();
-        public IEnumerable<EIdx> EIdxs
+        public EIdx[] EIdxs
         {
-            get => EIdxsInner;
+            get => EIdxsInner.ToArray();
         }
 
         public List<PIdx> PIdxsInner = new List<PIdx>();
-        public IEnumerable<PIdx> PIdxs
+        public PIdx[] PIdxs
         {
-            get => PIdxsInner;
+            get => PIdxsInner.ToArray();
+        }
+
+        // a place to cache it when calculated by the Surface
+        public Vector3? Normal
+        {
+            get;
+            set;
+        }
+
+        public bool IsSharp {
+            get;
+            set;
         }
 
         public void AddEIdx(EIdx e_idx)
@@ -128,12 +140,20 @@ namespace SubD
 
         public Vert Clone(bool position_only)
         {
+            Vert ret;
+
             if (position_only)
             {
-                return new Vert(Position);
+                ret = new Vert(Position);
+            }
+            else
+            {
+                ret = new Vert(Position, EIdxs, PIdxs);
             }
 
-            return new Vert(Position, EIdxs, PIdxs);
+            ret.IsSharp = IsSharp;
+
+            return ret;
         }
     }
 }

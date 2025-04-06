@@ -35,7 +35,11 @@ namespace SubD
 
         public IEnumerable<VIdx> EdgeVIdxs(EIdx e_idx) => Edges[e_idx].VIdxs;
 
-        public IEnumerable<Vert> EdgeVerts(EIdx e_idx) => Edges[e_idx].VIdxs.Select(x => Verts[x]);
+        public IEnumerable<Vert> EdgeVerts(EIdx e_idx) => EdgeVIdxs(e_idx).Select(x => Verts[x]);
+
+        public IEnumerable<PIdx> EdgePIdxs(EIdx e_idx) => Edges[e_idx].PIdxs;
+
+        public IEnumerable<Poly> EdgePolys(EIdx e_idx) => EdgePIdxs(e_idx).Select(x => Polys[x]);
 
         public BidirectionalDictionary<VIdx, Vert> Verts
         {
@@ -43,7 +47,111 @@ namespace SubD
             private set;
         }
 
-        public Vector3 EdgeMidpoint(EIdx e_idx) => EdgeVerts(e_idx).Select(x => x.Position).Aggregate(Vector3.Zero, (x, y) => x + y) / 2;
+        public IEnumerable<EIdx> VertEIdxs(VIdx v_idx) => Verts[v_idx].EIdxs;
+
+        public IEnumerable<Edge> VertEdges(VIdx v_idx) => VertEIdxs(v_idx).Select(x => Edges[x]);
+
+        public IEnumerable<PIdx> VertPIdxs(VIdx v_idx) => Verts[v_idx].PIdxs;
+
+        public IEnumerable<Poly> VertPolys(VIdx v_idx) => VertPIdxs(v_idx).Select(x => Polys[x]);
+
+        public Vector3 EdgeMidpoint(EIdx e_idx) => EdgeVerts(e_idx).Select(x => x.Position).Sum() / 2;
+
+        VIdx? GetVIdx(Vector3 pos)
+        {
+            Vert temp = new Vert(pos);
+            if (!Verts.Contains(temp))
+            {
+                return null;
+            }
+
+            // translate our correct-position-wrong-reference vert into a VIdx (by value)
+            return Verts[temp];
+        }
+
+        public Vert GetVert(Vector3 pos)
+        {
+            VIdx? v_idx = GetVIdx(pos);
+
+            return v_idx.HasValue ? Verts[v_idx.Value] : null;
+        }
+
+        public EIdx? GetEIdx(Vector3 p1, Vector3 p2)
+        {
+            VIdx? v1_idx = GetVIdx(p1);
+            VIdx? v2_idx = GetVIdx(p2);
+
+            if (v1_idx == null || v2_idx == null)
+            {
+                return null;
+            }
+
+            Edge temp = new Edge(v1_idx.Value, v2_idx.Value);
+
+            if (Edges.Contains(temp))
+            {
+                // translate our correct-VIdxs-wrong-reference edge into an EIdx (by value)
+                return Edges[temp];
+            }
+
+            Edge r_temp = temp.Reversed();
+
+            if (Edges.Contains(r_temp))
+            {
+                // translate our correct-VIdxs-wrong-reference edge into an EIdx (by value)
+                return Edges[r_temp];
+            }
+
+            return null;
+        }
+
+        public Edge GetEdge(Vector3 p1, Vector3 p2)
+        {
+            EIdx? e_idx = GetEIdx(p1, p2);
+
+            return e_idx.HasValue ? Edges[e_idx.Value] : null;
+        }
+
+        public Vector3 PolyNormal(PIdx p_idx)
+        {
+            Poly poly = Polys[p_idx];
+
+            if (poly.Normal == null)
+            {
+                Vector3[] verts = PolyVerts(p_idx).Select(x => x.Position).ToArray();
+
+                Vector3 last_delta = verts[1] - verts[0];
+
+                Vector3 accum = Vector3.Zero;
+
+                for(int i = 2; i < verts.Length; i++)
+                {
+                    Vector3 delta = verts[i] - verts[0];
+
+                    Vector3 cross = delta.Cross(last_delta);
+
+                    accum += cross;
+
+                    last_delta = delta;
+                }
+
+                poly.Normal = accum.Normalized();
+            }
+
+            return poly.Normal.Value;
+        }
+
+        public Vector3 VertNormal(VIdx v_idx)
+        {
+            Vert vert = Verts[v_idx];
+
+            if (vert.Normal == null)
+            {
+                vert.Normal = vert.PIdxs.Select(x => PolyNormal(x)).Sum() / vert.PIdxs.Count();
+            }
+
+            return vert.Normal.Value;
+        }
 
         public Surface(
             BidirectionalDictionary<VIdx, Vert> verts,
@@ -64,7 +172,6 @@ namespace SubD
             // poly is immutable anyway
 
             // debug-only topology validation
-
 #if DEBUG
             foreach(var pair in verts)
             {
@@ -131,14 +238,15 @@ namespace SubD
             }
 
             Vector3[] verts = Verts.OrderBy(x => x.Key).Select(x => x.Value.Position).ToArray();
-
             List<int> idxs = new List<int>();
+            Vector3[] normals = Verts.OrderBy(x => x.Key).Select(x => VertNormal(x.Key)).ToArray();
 
             // split our polys apart into individual triangles
             foreach(var p_idx in Polys.Keys)
             {
                 VIdx[] v_idxs = PolyVIdxs(p_idx).ToArray();
 
+                // build the poly from a fan of trianges around vert-0
                 for(int p = 1; p < v_idxs.Length - 1; p++)
                 {
                     idxs.Add(vert_remap[v_idxs[0]]);
@@ -151,9 +259,45 @@ namespace SubD
             arrays.Resize((int)Mesh.ArrayType.Max);
             arrays[(int)Mesh.ArrayType.Vertex] = verts;
             arrays[(int)Mesh.ArrayType.Index] = idxs.ToArray();
+            arrays[(int)Mesh.ArrayType.Normal] = normals;
 
             // Create the Mesh.
             mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+
+            return mesh;
+        }
+
+         public Mesh ToMeshLines(bool sharp_only)
+        {
+            ArrayMesh mesh = new ArrayMesh();
+
+            Dictionary<VIdx, int> vert_remap = new Dictionary<VIdx, int>();
+            int next_vert_idx = 0;
+
+            // some verts can have been deleted, so we need to make the indices contiguous again
+            foreach(VIdx v_idx in Verts.Keys)
+            {
+                vert_remap[v_idx] = next_vert_idx++;
+            }
+
+            Vector3[] verts = Verts.OrderBy(x => x.Key).Select(x => x.Value.Position).ToArray();
+            List<int> idxs = new List<int>();
+            Vector3[] normals = Verts.OrderBy(x => x.Key).Select(x => VertNormal(x.Key)).ToArray();
+
+            foreach(Edge edge in Edges.Values.Where(x => !sharp_only || x.IsSharp))
+            {
+                idxs.Add(vert_remap[edge.Start]);
+                idxs.Add(vert_remap[edge.End]);
+            }
+
+            var arrays = new Godot.Collections.Array();
+            arrays.Resize((int)Mesh.ArrayType.Max);
+            arrays[(int)Mesh.ArrayType.Vertex] = verts;
+            arrays[(int)Mesh.ArrayType.Index] = idxs.ToArray();
+            arrays[(int)Mesh.ArrayType.Normal] = normals;
+
+            // Create the Mesh.
+            mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Lines, arrays);
 
             return mesh;
         }

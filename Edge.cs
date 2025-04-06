@@ -6,7 +6,7 @@ using VIdx = SubD.Idx<SubD.Vert>;
 
 namespace SubD
 {
-    [DebuggerDisplay("{Start}->{End} Left: {SubD.Idx<SubD.Poly>.Idx2String(Left)} Right: {SubD.Idx<SubD.Poly>.Idx2String(Right)}")]
+    [DebuggerDisplay("{Start}->{End} Left: {SubD.Idx<SubD.Poly>.Idx2String(Left)} Right: {SubD.Idx<SubD.Poly>.Idx2String(Right)} Sharp: {IsSharp}")]
     public class Edge
     {
         public VIdx Start
@@ -19,6 +19,11 @@ namespace SubD
         {
             get;
             private set;
+        }
+
+        public bool IsSharp {
+            get;
+            set;
         }
 
         // ideally we would be a const object, but construction is quite spread out in time and having a separate "builder" version of this
