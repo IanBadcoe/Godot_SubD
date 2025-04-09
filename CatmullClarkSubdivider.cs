@@ -34,7 +34,7 @@ namespace SubD
             NewEdges = new BidirectionalDictionary<EIdx, Edge>();
             NewPolys = new BidirectionalDictionary<PIdx, Poly>();
 
-            Dictionary<PIdx, VIdx> face_centre_map = new Dictionary<PIdx, VIdx>();
+            Dictionary<PIdx, VIdx> face_centre_map = new();
 
             // inject face centre verts
             foreach(var pair in input.Polys)
@@ -48,7 +48,7 @@ namespace SubD
                 face_centre_map[pair.Key] = v_idx;
             }
 
-            Dictionary<EIdx, VIdx> edge_centre_map = new Dictionary<EIdx, VIdx>();
+            Dictionary<EIdx, VIdx> edge_centre_map = new();
 
             // inject edge centre verts
             foreach(var pair in input.Edges)
@@ -168,7 +168,7 @@ namespace SubD
                 }
             }
 
-            Surface ret = new Surface(NewVerts, NewEdges, NewPolys);
+            Surface ret = new(NewVerts, NewEdges, NewPolys);
 
             Reset();
 
@@ -186,9 +186,9 @@ namespace SubD
 
         private void AddPoly(EdgeWithSharpness[] v_idxs)
         {
-            List<EIdx> e_idxs = new List<EIdx>();
-            List<Edge> left_edges = new List<Edge>();
-            List<Edge> right_edges = new List<Edge>();
+            List<EIdx> e_idxs = new();
+            List<Edge> left_edges = new();
+            List<Edge> right_edges = new();
 
             EdgeWithSharpness prev_pair = v_idxs.Last();
 
@@ -207,8 +207,8 @@ namespace SubD
                 prev_pair = pair;
             }
 
-            Poly poly = new Poly(v_idxs.Select(x => x.Item1), e_idxs);
-            PIdx p_idx = new PIdx(NextPolyIdx++);
+            Poly poly = new(v_idxs.Select(x => x.Item1), e_idxs);
+            PIdx p_idx = new(NextPolyIdx++);
             NewPolys[p_idx] = poly;
 
             // it's a new poly, so let all the verts know
@@ -230,11 +230,11 @@ namespace SubD
 
         private EIdx AddEdge(EdgeWithSharpness v1, EdgeWithSharpness v2, out bool is_left)
         {
-            Edge edge = new Edge(v1.Item1, v2.Item1);
+            Edge edge = new(v1.Item1, v2.Item1);
             Edge r_edge = edge.Reversed();
 
             // we should see each edge twice, once forwards, when it should be new, and once backwards
-            Debug.Assert(!NewEdges.Contains(edge));
+            Util.Assert(!NewEdges.Contains(edge));
 
             if (NewEdges.Contains(r_edge))
             {
@@ -260,7 +260,7 @@ namespace SubD
 
         BidirectionalDictionary<VIdx, Vert> CloneVerts(BidirectionalDictionary<VIdx, Vert> verts)
         {
-            BidirectionalDictionary<VIdx, Vert> ret = new BidirectionalDictionary<VIdx, Vert>();
+            BidirectionalDictionary<VIdx, Vert> ret = new();
 
             foreach(var pair in verts)
             {

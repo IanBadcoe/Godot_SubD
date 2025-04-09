@@ -22,13 +22,13 @@ namespace SubD
         // (and vert, and maybe poly) would be a pain, so let's instead have a "Freeze" operation at the end of construction
         bool Frozen = false;
 
-        public List<EIdx> EIdxsInner = new List<EIdx>();
+        public List<EIdx> EIdxsInner = new();
         public EIdx[] EIdxs
         {
             get => EIdxsInner.ToArray();
         }
 
-        public List<PIdx> PIdxsInner = new List<PIdx>();
+        public List<PIdx> PIdxsInner = new();
         public PIdx[] PIdxs
         {
             get => PIdxsInner.ToArray();

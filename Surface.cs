@@ -59,7 +59,7 @@ namespace SubD
 
         VIdx? GetVIdx(Vector3 pos)
         {
-            Vert temp = new Vert(pos);
+            Vert temp = new(pos);
             if (!Verts.Contains(temp))
             {
                 return null;
@@ -76,17 +76,9 @@ namespace SubD
             return v_idx.HasValue ? Verts[v_idx.Value] : null;
         }
 
-        public EIdx? GetEIdx(Vector3 p1, Vector3 p2)
+        public EIdx? GetEIdx(VIdx v1, VIdx v2)
         {
-            VIdx? v1_idx = GetVIdx(p1);
-            VIdx? v2_idx = GetVIdx(p2);
-
-            if (v1_idx == null || v2_idx == null)
-            {
-                return null;
-            }
-
-            Edge temp = new Edge(v1_idx.Value, v2_idx.Value);
+            Edge temp = new(v1, v2);
 
             if (Edges.Contains(temp))
             {
@@ -105,9 +97,29 @@ namespace SubD
             return null;
         }
 
+        public EIdx? GetEIdx(Vector3 p1, Vector3 p2)
+        {
+            VIdx? v1_idx = GetVIdx(p1);
+            VIdx? v2_idx = GetVIdx(p2);
+
+            if (v1_idx == null || v2_idx == null)
+            {
+                return null;
+            }
+
+            return GetEIdx(v1_idx.Value, v2_idx.Value);
+        }
+
         public Edge GetEdge(Vector3 p1, Vector3 p2)
         {
             EIdx? e_idx = GetEIdx(p1, p2);
+
+            return e_idx.HasValue ? Edges[e_idx.Value] : null;
+        }
+
+        public Edge GetEdge(VIdx v1, VIdx v2)
+        {
+            EIdx? e_idx = GetEIdx(v1, v2);
 
             return e_idx.HasValue ? Edges[e_idx.Value] : null;
         }
@@ -178,28 +190,31 @@ namespace SubD
                 // all verts which reference an edge should be referenced by the edge
                 foreach(Edge edge in pair.Value.EIdxs.Select(x => edges[x]))
                 {
-                    Debug.Assert(edge.VIdxs.Contains(pair.Key));
+                    Util.Assert(edge.VIdxs.Contains(pair.Key));
                 }
 
                 // all verts which reference a poly should be referenced by the poly
                 foreach(Poly poly in pair.Value.PIdxs.Select(x => polys[x]))
                 {
-                    Debug.Assert(poly.VIdxs.Contains(pair.Key));
+                    Util.Assert(poly.VIdxs.Contains(pair.Key));
                 }
             }
 
             foreach(var pair in edges)
             {
+                Util.Assert(pair.Value.Left.HasValue);
+                Util.Assert(pair.Value.Right.HasValue);
+
                 // all edges which reference a vert should be referenced by the vert
                 foreach(Vert vert in pair.Value.VIdxs.Select(x => verts[x]))
                 {
-                    Debug.Assert(vert.EIdxs.Contains(pair.Key));
+                    Util.Assert(vert.EIdxs.Contains(pair.Key));
                 }
 
                 // all edges which reference a poly should be referenced by the poly
                 foreach(Poly poly in pair.Value.PIdxs.Select(x => polys[x]))
                 {
-                    Debug.Assert(poly.EIdxs.Contains(pair.Key));
+                    Util.Assert(poly.EIdxs.Contains(pair.Key));
                 }
             }
 
@@ -208,13 +223,13 @@ namespace SubD
                 // all polys which reference a vert should be referenced by the vert
                 foreach(Vert vert in pair.Value.VIdxs.Select(x => verts[x]))
                 {
-                    Debug.Assert(vert.PIdxs.Contains(pair.Key));
+                    Util.Assert(vert.PIdxs.Contains(pair.Key));
                 }
 
                 // all polys which reference an edge should be referenced by the edge
                 foreach(Edge edge in pair.Value.EIdxs.Select(x => edges[x]))
                 {
-                    Debug.Assert(edge.PIdxs.Contains(pair.Key));
+                    Util.Assert(edge.PIdxs.Contains(pair.Key));
                 }
             }
 #endif
@@ -226,9 +241,9 @@ namespace SubD
 
         public Mesh ToMesh()
         {
-            ArrayMesh mesh = new ArrayMesh();
+            ArrayMesh mesh = new();
 
-            Dictionary<VIdx, int> vert_remap = new Dictionary<VIdx, int>();
+            Dictionary<VIdx, int> vert_remap = new();
             int next_vert_idx = 0;
 
             // some verts can have been deleted, so we need to make the indices contiguous again
@@ -238,7 +253,7 @@ namespace SubD
             }
 
             Vector3[] verts = Verts.OrderBy(x => x.Key).Select(x => x.Value.Position).ToArray();
-            List<int> idxs = new List<int>();
+            List<int> idxs = new();
             Vector3[] normals = Verts.OrderBy(x => x.Key).Select(x => VertNormal(x.Key)).ToArray();
 
             // split our polys apart into individual triangles
@@ -269,9 +284,9 @@ namespace SubD
 
          public Mesh ToMeshLines(bool sharp_only)
         {
-            ArrayMesh mesh = new ArrayMesh();
+            ArrayMesh mesh = new();
 
-            Dictionary<VIdx, int> vert_remap = new Dictionary<VIdx, int>();
+            Dictionary<VIdx, int> vert_remap = new();
             int next_vert_idx = 0;
 
             // some verts can have been deleted, so we need to make the indices contiguous again
@@ -281,7 +296,7 @@ namespace SubD
             }
 
             Vector3[] verts = Verts.OrderBy(x => x.Key).Select(x => x.Value.Position).ToArray();
-            List<int> idxs = new List<int>();
+            List<int> idxs = new();
             Vector3[] normals = Verts.OrderBy(x => x.Key).Select(x => VertNormal(x.Key)).ToArray();
 
             foreach(Edge edge in Edges.Values.Where(x => !sharp_only || x.IsSharp))

@@ -8,108 +8,405 @@ using VIdx = SubD.Idx<SubD.Vert>;
 using EIdx = SubD.Idx<SubD.Edge>;
 using PIdx = SubD.Idx<SubD.Poly>;
 using System.Diagnostics;
+using System.Dynamic;
+using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace SubD
 {
+    public class Cube
+    {
+        // Top/Bottom = Y
+        // Front/Back = Z
+        // Left/Right = X
+        public enum VertName
+        {
+            TopFrontLeft,
+            TopFrontRight,
+            TopBackLeft,
+            TopBackRight,
+            BottomFrontLeft,
+            BottomFrontRight,
+            BottomBackLeft,
+            BottomBackRight,
+        }
+
+        public enum EdgeName
+        {
+            TopLeft,
+            TopRight,
+            TopFront,
+            TopBack,
+            BottomLeft,
+            BottomRight,
+            BottomFront,
+            BottomBack,
+            FrontRight,
+            FrontLeft,
+            BackRight,
+            BackLeft,
+        }
+
+        public enum FaceName
+        {
+            Top,
+            Bottom,
+            Left,
+            Right,
+            Front,
+            Back
+        }
+
+        Dictionary<VertName, bool> VertSharpnessInner = VertNameUtils.AllVerts.ToDictionary(x => x, x => false);
+
+        Dictionary<EdgeName, bool> EdgeSharpnessInner = EdgeNameUtils.AllEdges.ToDictionary(x => x, x => false);
+
+        public Vector3I Position
+        {
+            get;
+            private set;
+        }
+
+        public Cube()
+        {
+            IsVertSharp = new IndexedProperty<VertName, bool>(VertSharpnessInner, false);
+            IsEdgeSharp = new IndexedProperty<EdgeName, bool>(EdgeSharpnessInner, false);
+        }
+
+        public Cube(Vector3I position)
+            : this()
+        {
+            Position = position;
+        }
+
+        public IndexedProperty<VertName, bool> IsVertSharp;
+        public IndexedProperty<EdgeName, bool> IsEdgeSharp;
+
+        static readonly Dictionary<VertName, Vector3> VertOffsets = new() {
+            { VertName.BottomBackLeft, new Vector3(-0.5f, -0.5f, -0.5f) },
+            { VertName.BottomBackRight, new Vector3( 0.5f, -0.5f, -0.5f) },
+            { VertName.TopBackRight, new Vector3( 0.5f,  0.5f, -0.5f) },
+            { VertName.TopBackLeft, new Vector3(-0.5f,  0.5f, -0.5f) },
+
+            { VertName.BottomFrontLeft, new Vector3(-0.5f, -0.5f,  0.5f) },
+            { VertName.BottomFrontRight, new Vector3( 0.5f, -0.5f,  0.5f) },
+            { VertName.TopFrontRight, new Vector3( 0.5f,  0.5f,  0.5f) },
+            { VertName.TopFrontLeft, new Vector3(-0.5f,  0.5f,  0.5f) },
+        };
+
+        public Vector3 GetVert(VertName v_name)
+        {
+            return VertOffsets[v_name] + Position;
+        }
+    }
+
+    public static class VertNameUtils
+    {
+        static readonly Cube.VertName[] AllVertsInner =
+        [
+            Cube.VertName.TopFrontLeft,
+            Cube.VertName.TopFrontRight,
+            Cube.VertName.TopBackLeft,
+            Cube.VertName.TopBackRight,
+            Cube.VertName.BottomFrontLeft,
+            Cube.VertName.BottomFrontRight,
+            Cube.VertName.BottomBackLeft,
+            Cube.VertName.BottomBackRight
+        ];
+
+        public static bool IsTop(this Cube.VertName vert)
+        {
+            return TopVerts.Contains(vert);
+        }
+
+        public static bool IsBottom(this Cube.VertName vert)
+        {
+            return BottomVerts.Contains(vert);
+        }
+
+        public static bool IsLeft(this Cube.VertName vert)
+        {
+            return LeftVerts.Contains(vert);
+        }
+
+        public static bool IsRight(this Cube.VertName vert)
+        {
+            return RightVerts.Contains(vert);
+        }
+
+        public static bool IsFront(this Cube.VertName vert)
+        {
+            return FrontVerts.Contains(vert);
+        }
+
+        public static bool IsBack(this Cube.VertName vert)
+        {
+            return BackVerts.Contains(vert);
+        }
+
+        public static IEnumerable<Cube.VertName> AllVerts
+        {
+            get => AllVertsInner;
+        }
+
+        public static IEnumerable<Cube.VertName> TopVerts
+        {
+            get => [Cube.VertName.TopBackLeft, Cube.VertName.TopBackRight, Cube.VertName.TopFrontLeft, Cube.VertName.TopFrontRight];
+        }
+
+        public static IEnumerable<Cube.VertName> BottomVerts
+        {
+            get => [Cube.VertName.BottomBackLeft, Cube.VertName.BottomBackRight, Cube.VertName.BottomFrontLeft, Cube.VertName.BottomFrontRight];
+        }
+
+        public static IEnumerable<Cube.VertName> RightVerts
+        {
+            get => [Cube.VertName.TopBackRight, Cube.VertName.TopFrontRight, Cube.VertName.BottomBackRight, Cube.VertName.BottomFrontRight];
+        }
+
+        public static IEnumerable<Cube.VertName> LeftVerts
+        {
+            get => [Cube.VertName.TopBackLeft, Cube.VertName.TopFrontLeft, Cube.VertName.BottomBackLeft, Cube.VertName.BottomFrontLeft];
+        }
+
+        public static IEnumerable<Cube.VertName> FrontVerts
+        {
+            get => [Cube.VertName.TopFrontRight, Cube.VertName.BottomFrontRight, Cube.VertName.TopFrontLeft, Cube.VertName.BottomFrontLeft];
+        }
+
+        public static IEnumerable<Cube.VertName> BackVerts
+        {
+            get => [Cube.VertName.TopBackRight, Cube.VertName.BottomBackRight, Cube.VertName.TopBackLeft, Cube.VertName.BottomBackLeft];
+        }
+    }
+
+    static class EdgeNameUtils
+    {
+        static readonly Cube.EdgeName[] AllEdgesInner =
+        [
+            Cube.EdgeName.TopLeft,
+            Cube.EdgeName.TopRight,
+            Cube.EdgeName.TopFront,
+            Cube.EdgeName.TopBack,
+            Cube.EdgeName.BottomLeft,
+            Cube.EdgeName.BottomRight,
+            Cube.EdgeName.BottomFront,
+            Cube.EdgeName.BottomBack,
+            Cube.EdgeName.FrontRight,
+            Cube.EdgeName.FrontLeft,
+            Cube.EdgeName.BackRight,
+            Cube.EdgeName.BackLeft,
+        ];
+
+        public static IEnumerable<Cube.EdgeName> AllEdges
+        {
+            get => AllEdgesInner;
+        }
+
+        static readonly Dictionary<Cube.EdgeName, (Cube.VertName, Cube.VertName)> EdgeIsBetween = new()
+        {
+            { Cube.EdgeName.BackLeft, (Cube.VertName.BottomBackLeft, Cube.VertName.TopBackLeft) },
+            { Cube.EdgeName.BackRight, (Cube.VertName.BottomBackRight, Cube.VertName.TopBackRight) },
+            { Cube.EdgeName.BottomBack, (Cube.VertName.BottomBackLeft, Cube.VertName.BottomBackRight) },
+            { Cube.EdgeName.BottomFront, (Cube.VertName.BottomFrontLeft, Cube.VertName.BottomFrontRight) },
+            { Cube.EdgeName.BottomLeft, (Cube.VertName.BottomFrontLeft, Cube.VertName.BottomBackLeft) },
+            { Cube.EdgeName.BottomRight, (Cube.VertName.BottomFrontRight, Cube.VertName.BottomBackRight) },
+            { Cube.EdgeName.FrontLeft, (Cube.VertName.BottomFrontLeft, Cube.VertName.TopFrontLeft) },
+            { Cube.EdgeName.FrontRight, (Cube.VertName.BottomFrontRight, Cube.VertName.TopFrontRight) },
+            { Cube.EdgeName.TopBack, (Cube.VertName.TopBackLeft, Cube.VertName.TopBackRight) },
+            { Cube.EdgeName.TopFront, (Cube.VertName.TopFrontLeft, Cube.VertName.TopFrontRight) },
+            { Cube.EdgeName.TopLeft, (Cube.VertName.TopBackLeft, Cube.VertName.TopFrontLeft) },
+            { Cube.EdgeName.TopRight, (Cube.VertName.TopBackRight, Cube.VertName.TopFrontRight) },
+        };
+
+        public static (Cube.VertName, Cube.VertName) GetEdgeVerts(Cube.EdgeName e_name)
+        {
+            return EdgeIsBetween[e_name];
+        }
+
+        public static IEnumerable<Cube.VertName> Both(this (Cube.VertName v1, Cube.VertName v2) pair)
+        {
+            yield return pair.v1;
+            yield return pair.v2;
+        }
+
+        public static bool IsTop(this Cube.EdgeName edge)
+        {
+            return TopEdges.Contains(edge);
+        }
+
+        public static bool IsBottom(this Cube.EdgeName edge)
+        {
+            return BottomEdges.Contains(edge);
+        }
+
+        public static bool IsLeft(this Cube.EdgeName edge)
+        {
+            return LeftEdges.Contains(edge);
+        }
+
+        public static bool IsRight(this Cube.EdgeName edge)
+        {
+            return RightEdges.Contains(edge);
+        }
+
+        public static bool IsFront(this Cube.EdgeName edge)
+        {
+            return FrontEdges.Contains(edge);
+        }
+
+        public static bool IsBack(this Cube.EdgeName edge)
+        {
+            return BackEdges.Contains(edge);
+        }
+
+        public static IEnumerable<Cube.EdgeName> TopEdges
+        {
+            get => AllEdges.Where(x => EdgeIsBetween[x].Both().All(x => x.IsTop()));
+        }
+
+        public static IEnumerable<Cube.EdgeName> BottomEdges
+        {
+            get => AllEdges.Where(x => EdgeIsBetween[x].Both().All(x => x.IsBottom()));
+        }
+
+        public static IEnumerable<Cube.EdgeName> LeftEdges
+        {
+            get => AllEdges.Where(x => EdgeIsBetween[x].Both().All(x => x.IsLeft()));
+        }
+
+        public static IEnumerable<Cube.EdgeName> RightEdges
+        {
+            get => AllEdges.Where(x => EdgeIsBetween[x].Both().All(x => x.IsRight()));
+        }
+
+        public static IEnumerable<Cube.EdgeName> FrontEdges
+        {
+            get => AllEdges.Where(x => EdgeIsBetween[x].Both().All(x => x.IsFront()));
+        }
+
+        public static IEnumerable<Cube.EdgeName> BackEdges
+        {
+            get => AllEdges.Where(x => EdgeIsBetween[x].Both().All(x => x.IsBack()));
+        }
+    }
+
+    public static class FaceNameUtils
+    {
+        static Dictionary<Cube.FaceName, Cube.EdgeName[]> FaceEdges = new()
+        {
+            { Cube.FaceName.Top, [ Cube.EdgeName.TopLeft, Cube.EdgeName.TopBack, Cube.EdgeName.TopRight, Cube.EdgeName.TopFront ] },
+            { Cube.FaceName.Bottom, [ Cube.EdgeName.BottomLeft, Cube.EdgeName.BottomFront, Cube.EdgeName.BottomRight, Cube.EdgeName.BottomBack ] },
+            { Cube.FaceName.Front, [ Cube.EdgeName.FrontLeft, Cube.EdgeName.TopFront, Cube.EdgeName.FrontRight, Cube.EdgeName.BottomFront ] },
+            { Cube.FaceName.Back, [ Cube.EdgeName.BackLeft, Cube.EdgeName.BottomBack, Cube.EdgeName.BackRight, Cube.EdgeName.TopBack ] },
+            { Cube.FaceName.Right, [ Cube.EdgeName.FrontRight, Cube.EdgeName.TopRight, Cube.EdgeName.BackRight, Cube.EdgeName.BottomRight ] },
+            { Cube.FaceName.Left, [ Cube.EdgeName.FrontLeft, Cube.EdgeName.BottomLeft, Cube.EdgeName.BackLeft, Cube.EdgeName.TopLeft ] },
+        };
+
+        static Dictionary<Cube.FaceName, Cube.VertName[]> FaceVerts = new()
+        {
+            { Cube.FaceName.Top, [ Cube.VertName.TopFrontLeft, Cube.VertName.TopBackLeft, Cube.VertName.TopBackRight, Cube.VertName.TopFrontRight ] },
+            { Cube.FaceName.Bottom, [ Cube.VertName.BottomFrontLeft, Cube.VertName.BottomFrontRight, Cube.VertName.BottomBackRight, Cube.VertName.BottomBackLeft ] },
+            { Cube.FaceName.Front, [ Cube.VertName.BottomFrontLeft, Cube.VertName.TopFrontLeft, Cube.VertName.TopFrontRight, Cube.VertName.BottomFrontRight ] },
+            { Cube.FaceName.Back, [ Cube.VertName.TopBackLeft, Cube.VertName.BottomBackLeft, Cube.VertName.BottomBackRight, Cube.VertName.TopBackRight ] },
+            { Cube.FaceName.Right, [ Cube.VertName.BottomFrontRight, Cube.VertName.TopFrontRight, Cube.VertName.TopBackRight, Cube.VertName.BottomBackRight ] },
+            { Cube.FaceName.Left, [ Cube.VertName.TopFrontLeft, Cube.VertName.BottomFrontLeft, Cube.VertName.BottomBackLeft, Cube.VertName.TopBackLeft ] },
+        };
+
+        public static IEnumerable<Cube.EdgeName> GetEdgesForFace(Cube.FaceName f_name)
+        {
+            return FaceEdges[f_name];
+        }
+
+        public static IEnumerable<Cube.VertName> GetVertsForFace(Cube.FaceName f_name)
+        {
+            return FaceVerts[f_name];
+        }
+
+        static Cube.FaceName[] AllFacesInner = [Cube.FaceName.Top, Cube.FaceName.Bottom, Cube.FaceName.Left, Cube.FaceName.Right, Cube.FaceName.Front, Cube.FaceName.Back];
+
+        public static IEnumerable<Cube.FaceName> AllFaces
+        {
+            get => AllFacesInner;
+        }
+
+    }
+
     [DebuggerDisplay("Count = {Cubes.Count}")]
     public class BuildFromCubes
     {
-        static int NextVertIdx = 0;
-        static int NextEdgeIdx = 0;
-        static int NextPolyIdx = 0;
-
         public struct IdxCube
         {
-            public VIdx[] VertIdxs
+            public IReadOnlyDictionary<Cube.VertName, VIdx> VertMap
             {
                 get;
                 private set;
             }
 
-            public int Group
+            public Cube Cube
             {
                 get;
                 private set;
             }
 
-            public IdxCube(IEnumerable<VIdx> verts, int group)
+            public IdxCube(IDictionary<Cube.VertName, VIdx> vert_map, Cube cube)
             {
-                VertIdxs = verts.ToArray();
-                Group = group;
+                VertMap = vert_map.AsReadOnly();
+                Cube = cube;
             }
         }
 
-        Vector3[] VertOffsets = [
-            new Vector3(-0.5f, -0.5f, -0.5f),
-            new Vector3( 0.5f, -0.5f, -0.5f),
-            new Vector3( 0.5f,  0.5f, -0.5f),
-            new Vector3(-0.5f,  0.5f, -0.5f),
+        int NextVertIdx;
+        int NextEdgeIdx;
+        int NextPolyIdx;
 
-            new Vector3(-0.5f, -0.5f,  0.5f),
-            new Vector3( 0.5f, -0.5f,  0.5f),
-            new Vector3( 0.5f,  0.5f,  0.5f),
-            new Vector3(-0.5f,  0.5f,  0.5f),
-        ];
+        List<Cube> Cubes;
+        BidirectionalDictionary<VIdx, Vert> Verts;
+        BidirectionalDictionary<EIdx, Edge> Edges;
+        BidirectionalDictionary<PIdx, Poly> Polys;
 
-        int[][] FaceIdxs = new int[][]
+        public BuildFromCubes()
         {
-            new int[] {
-                0, 1, 2, 3
-            },
-            new int[] {
-                1, 0, 4, 5
-            },
-            new int[] {
-                4, 0, 3, 7
-            },
-            new int[] {
-                4, 7, 6, 5
-            },
-            new int[] {
-                6, 7, 3, 2
-            },
-            new int[] {
-                6, 2, 1, 5
-            },
-        };
+            Reset();
+        }
 
-        Dictionary<Vector3I, int> Cubes = new Dictionary<Vector3I, int>();
-
-        BidirectionalDictionary<VIdx, Vert> Verts = new BidirectionalDictionary<VIdx, Vert>();
-        BidirectionalDictionary<EIdx, Edge> Edges = new BidirectionalDictionary<EIdx, Edge>();
-        BidirectionalDictionary<PIdx, Poly> Polys = new BidirectionalDictionary<PIdx, Poly>();
-
-        public void SetCube(Vector3I position, int group = 0)
+        public Cube AddCube(Vector3I position)
         {
-            Cubes[position] = group;
+            Cube cube = new(position);
+
+            Cubes.Add(cube);
+
+            return cube;
         }
 
         public void RemoveCube(Vector3I position)
         {
-            Cubes.Remove(position);
+            Cubes = Cubes.Where(x => x.Position != position).ToList();
         }
 
-        public Surface ToSurface()
+        public Surface ToSurface(bool reset_after = true)
         {
-            List<IdxCube> idx_cubes = new List<IdxCube>();
+            List<IdxCube> idx_cubes = new();
 
-            foreach(var pair in Cubes)
+            foreach(var cube in Cubes)
             {
-                idx_cubes.Add(new IdxCube(CubeToIdxVerts(pair.Key), pair.Value));
+                idx_cubes.Add(new IdxCube(CubeToIdxVerts(cube), cube));
             }
 
             foreach(var cube in idx_cubes)
             {
-                List<VIdx[]> real_faces = new List<VIdx[]>();
+                // Debug.Print($"Cube: {cube.Centre}");
+
+                List<VIdx[]> real_faces = new();
 
                 // if any face is the negative of some other face, then instead of adding this one, we need to remove the other
                 // so that the two cubes join
                 //
                 // and we need to do that first, because edges can only have one Left or Right, and we might add a new
                 // face that wants to take an edge from an old one
-                foreach(int[] locally_indexed_face in FaceIdxs)
+                foreach(var f_name in FaceNameUtils.AllFaces)
                 {
-                    VIdx[] globally_indexed_face = locally_indexed_face.Select(x => cube.VertIdxs[x]).ToArray();
+                    VIdx[] globally_indexed_face = FaceNameUtils.GetVertsForFace(f_name).Select(x => cube.VertMap[x]).ToArray();
 
                     if (!ResolveOppositeFaces(globally_indexed_face))
                     {
@@ -119,15 +416,15 @@ namespace SubD
 
                 foreach(VIdx[] globally_indexed_face in real_faces)
                 {
-                    List<EIdx> face_edges = new List<EIdx>();
-                    List<Edge> left_edges = new List<Edge>();
-                    List<Edge> right_edges = new List<Edge>();
+                    List<EIdx> face_edges = new();
+                    List<Edge> left_edges = new();
+                    List<Edge> right_edges = new();
 
                     VIdx prev_v_idx = globally_indexed_face.Last();
 
                     foreach(VIdx v_idx in globally_indexed_face)
                     {
-                        Edge edge = new Edge(prev_v_idx, v_idx);
+                        Edge edge = new(prev_v_idx, v_idx);
                         Edge r_edge = edge.Reversed();
 
                         if (Edges.Contains(edge))
@@ -149,7 +446,7 @@ namespace SubD
                         }
                         else
                         {
-                            EIdx e_idx = new EIdx(NextEdgeIdx++);
+                            EIdx e_idx = new(NextEdgeIdx++);
 
                             Edges[edge] = e_idx;
                             face_edges.Add(e_idx);
@@ -164,7 +461,28 @@ namespace SubD
                         prev_v_idx = v_idx;
                     }
 
-                    Poly poly = new Poly(globally_indexed_face, face_edges);
+                    foreach(Cube.EdgeName e_name in EdgeNameUtils.AllEdges)
+                    {
+                        if (cube.Cube.IsEdgeSharp[e_name])
+                        {
+                            // surely this can be made easier???
+                            (Cube.VertName v1_name, Cube.VertName v2_name) = EdgeNameUtils.GetEdgeVerts(e_name);
+
+                            VIdx v1 = cube.VertMap[v1_name];
+                            VIdx v2 = cube.VertMap[v2_name];
+
+                            Edge edge = new Edge(v1, v2);
+
+                            EIdx? real_e_idx = Edges.Contains(edge) ? Edges[edge] : Edges.Contains(edge.Reversed()) ? Edges[edge.Reversed()] : null;
+
+                            if (real_e_idx.HasValue)
+                            {
+                                Edges[real_e_idx.Value].IsSharp = true;
+                            }
+                        }
+                    }
+
+                    Poly poly = new(globally_indexed_face, face_edges);
 
                     PIdx p_idx = new(NextPolyIdx++);
                     Polys[poly] = p_idx;
@@ -189,7 +507,14 @@ namespace SubD
                 }
             }
 
-            return new Surface(Verts, Edges, Polys);
+            Surface ret = new Surface(Verts, Edges, Polys);
+
+            if (reset_after)
+            {
+                Reset();
+            }
+
+            return ret;
         }
 
         private bool ResolveOppositeFaces(VIdx[] v_idxs)
@@ -197,14 +522,14 @@ namespace SubD
             VIdx[] v_r_temp = Poly.StandardiseVIdxOrder(v_idxs.Reverse()).ToArray();
 
 #if DEBUG
-            VIdx[] v_temp = Poly.StandardiseVIdxOrder(v_idxs).ToArray();;
+            VIdx[] v_temp = Poly.StandardiseVIdxOrder(v_idxs).ToArray();
 #endif
 
             foreach(var pair in Polys)
             {
 #if DEBUG
                 // we should *never* find the same face come up twice the same way around
-                Debug.Assert(!pair.Value.VIdxs.SequenceEqual(v_temp));
+                Util.Assert(!pair.Value.VIdxs.SequenceEqual(v_temp));
 #endif
 
                 // if we see the reverse of an existing face, they cancel...
@@ -223,11 +548,11 @@ namespace SubD
         {
             Poly poly = Polys.Remove(p_idx);
 
-            List<Tuple<EIdx, Edge>> removed_edges = new List<Tuple<EIdx, Edge>>();
+            List<Tuple<EIdx, Edge>> removed_edges = new();
 
             foreach(Edge edge in poly.EIdxs.Select(x => Edges[x]))
             {
-                Debug.Assert(edge.PIdxs.Contains(p_idx));
+                Util.Assert(edge.PIdxs.Contains(p_idx));
 
                 edge.RemovePoly(p_idx);
 
@@ -250,14 +575,14 @@ namespace SubD
             {
                 foreach(Vert vert in pair.Item2.VIdxs.Select(x => Verts[x]))
                 {
-                    Debug.Assert(vert.EIdxs.Contains(pair.Item1));
+                    Util.Assert(vert.EIdxs.Contains(pair.Item1));
 
                     vert.RemoveEdge(pair.Item1);
 
                     if (!vert.EIdxs.Any())
                     {
                         // vert realy should become empty of edges and polys at the same time...
-                        Debug.Assert(!vert.PIdxs.Any());
+                        Util.Assert(!vert.PIdxs.Any());
 
                         Verts.Remove(vert);
                     }
@@ -265,20 +590,44 @@ namespace SubD
             }
         }
 
-        IEnumerable<VIdx> CubeToIdxVerts(Vector3I position)
+        IDictionary<Cube.VertName, VIdx> CubeToIdxVerts(Cube cube)
         {
-            foreach(var offset in VertOffsets)
+            Dictionary<Cube.VertName, VIdx> ret = new();
+
+            foreach(Cube.VertName v_name in VertNameUtils.AllVerts)
             {
-                Vector3 pos = (Vector3)position + offset;
-                Vert vert = new Vert(pos);
+                Vector3 pos = cube.GetVert(v_name);
+
+                Vert vert = new(pos);
 
                 if (!Verts.Contains(vert))
                 {
                     Verts[vert] = new VIdx(NextVertIdx++);
                 }
 
-                yield return Verts[vert];
+                // any cube sharing this vert and saying this vert is sharp makes it so
+                if (cube.IsVertSharp[v_name])
+                {
+                    vert.IsSharp = true;
+                }
+
+                ret[v_name] = Verts[vert];
             }
+
+            return ret;
+        }
+
+        void Reset()
+        {
+            NextVertIdx = 0;
+            NextEdgeIdx = 0;
+            NextPolyIdx = 0;
+
+            Cubes = new();
+
+            Verts = new();
+            Edges = new();
+            Polys = new();
         }
     }
 }

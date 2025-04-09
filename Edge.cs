@@ -54,7 +54,7 @@ namespace SubD
 
                 // we do not expect to always have this, but if we do, we expect to set it once and not change it
                 // (could add ability to null it here, if that becomes an issue)
-                Debug.Assert(LeftInner == null);
+                Util.Assert(LeftInner == null);
 
                 LeftInner = value;
             }
@@ -76,7 +76,7 @@ namespace SubD
 
                 // we do not expect to always have this, but if we do, we expect to set it once and not change it
                 // (could add ability to null it here, if that becomes an issue)
-                Debug.Assert(RightInner == null);
+                Util.Assert(RightInner == null);
 
                 RightInner = value;
             }
@@ -123,7 +123,7 @@ namespace SubD
                 return End;
             }
 
-            Debug.Assert(vert == End);
+            Util.Assert(vert == End);
 
             return Start;
         }
@@ -135,7 +135,7 @@ namespace SubD
                 return Right;
             }
 
-            Debug.Assert(poly == Right);
+            Util.Assert(poly == Right);
 
             return Left;
         }
@@ -154,6 +154,10 @@ namespace SubD
             else if (p_idx == Right)
             {
                 RightInner = null;
+            }
+            else
+            {
+                Util.Assert(false);
             }
         }
 
