@@ -5,13 +5,22 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using Godot;
-using System.Diagnostics;
-using SubD;
-
-using EdgeWithSharpness = System.Tuple<SubD.Idx<SubD.Vert>, bool>;
 
 namespace SubD
 {
+    struct AnnotatedVert
+    {
+        public VIdx VIdx;
+        public Edge OriginalEdge;       //< this is the edge which (in terms of the poly we are splitting) followed VIdx
+                                        //< (the edge may have been used forwards or backwards, so this doesn't mean VIdx == OriginalEdge.Start)
+
+        public AnnotatedVert(VIdx v_idx, Edge original_edge)
+        {
+            VIdx = v_idx;
+            OriginalEdge = original_edge;
+        }
+    }
+
     public class CatmullClarkSubdivider : ISubdivider
     {
         int NextVertIdx;
@@ -40,11 +49,7 @@ namespace SubD
             foreach(var pair in input.Polys)
             {
                 VIdx v_idx = new(NextVertIdx++);
-                NewVerts[v_idx] = new Vert(
-                    input.PolyVerts(pair.Key)
-                        .Select(x => x.Position)
-                        .Sum()
-                      / pair.Value.VIdxs.Length);
+                NewVerts[v_idx] = new Vert(input.PolyCentre(pair.Key));
                 face_centre_map[pair.Key] = v_idx;
             }
 
@@ -56,7 +61,7 @@ namespace SubD
                 VIdx v_idx = new(NextVertIdx++);
                 edge_centre_map[pair.Key] = v_idx;
 
-                if (pair.Value.IsSharp)
+                if (pair.Value.IsSetSharp)
                 {
                     // sharp edges just interpolate their original position
                     NewVerts[v_idx] = new Vert(
@@ -92,7 +97,7 @@ namespace SubD
                 // n < 2 : smooth rule
                 // n == 2 : crease rule
                 // n > 2 : sharp rule
-                n_sharp_edges = input.VertEdges(input_v_idx).Count(x => x.IsSharp);
+                n_sharp_edges = input.VertEdges(input_v_idx).Count(x => x.IsSetSharp);
 
                 if (input_vert.IsSharp || n_sharp_edges > 2)
                 {
@@ -127,7 +132,7 @@ namespace SubD
                     // the other ends of the two original crease vectors...
                     Vector3 sum_crease_edges_other_ends
                         = input.VertEdges(input_v_idx)
-                            .Where(x => x.IsSharp)
+                            .Where(x => x.IsSetSharp)
                             .Select(x => input.Verts[x.OtherVert(input_v_idx).Value].Position)
                             .Sum();
 
@@ -141,7 +146,7 @@ namespace SubD
 
             foreach(var p_pair in input.Polys)
             {
-                EIdx[] input_e_idxs = input.PolyEIdxs(p_pair.Key).ToArray();
+                EIdx[] input_e_idxs = [.. input.PolyEIdxs(p_pair.Key)];
 
                 EIdx prev_e_idx = input_e_idxs.Last();
                 Edge prev_edge = input.Edges[prev_e_idx];
@@ -156,16 +161,26 @@ namespace SubD
 
                     AddPoly(
                         [
-                            new EdgeWithSharpness(start, edge.IsSharp),
-                            new EdgeWithSharpness(edge_centre_map[e_idx], false),
-                            new EdgeWithSharpness(face_centre_map[p_pair.Key], false),
-                            new EdgeWithSharpness(edge_centre_map[prev_e_idx], prev_edge.IsSharp)
+                            new AnnotatedVert(start, edge),
+                            new AnnotatedVert(edge_centre_map[e_idx], null),
+                            new AnnotatedVert(face_centre_map[p_pair.Key], null),
+                            new AnnotatedVert(edge_centre_map[prev_e_idx], prev_edge)
                         ]
                     );
 
                     prev_e_idx = e_idx;
                     prev_edge = edge;
                 }
+            }
+
+            foreach(VIdx v_idx in NewVerts.Keys)
+            {
+                Vert old_vert = NewVerts[v_idx];
+                // we added the edges and polys to the verts in a fairly arbitraty order, but we need
+                // them to both be clockwise, from outside the cube, looking inwards, and...
+                //
+                // we need the two edges of the poly at position N to be N and N + 1
+                NewVerts[v_idx] = VertUtil.ToVertWithSortedEdgesAndPolys(old_vert, v_idx, NewEdges, NewPolys);
             }
 
             Surface ret = new(NewVerts, NewEdges, NewPolys);
@@ -184,30 +199,27 @@ namespace SubD
             NewPolys = null;
         }
 
-        private void AddPoly(EdgeWithSharpness[] v_idxs)
+        private void AddPoly(AnnotatedVert[] v_idxs)
         {
             List<EIdx> e_idxs = new();
             List<Edge> left_edges = new();
             List<Edge> right_edges = new();
 
-            EdgeWithSharpness prev_pair = v_idxs.Last();
-
-            int sh_idx = -1;
-
-            foreach(EdgeWithSharpness pair in v_idxs)
+            for(int i = 0; i < v_idxs.Length; i++)
             {
+                AnnotatedVert av = v_idxs[i];
+                int next_i = (i + 1) % v_idxs.Length;
+                AnnotatedVert av_next = v_idxs[next_i];
+
                 bool is_left;
-                EIdx e_idx = AddEdge(prev_pair, pair, out is_left);
-                sh_idx++;
+                EIdx e_idx = AddEdge(av, av_next, out is_left);
 
                 e_idxs.Add(e_idx);
 
                 (is_left ? left_edges : right_edges).Add(NewEdges[e_idx]);
-
-                prev_pair = pair;
             }
 
-            Poly poly = new(v_idxs.Select(x => x.Item1), e_idxs);
+            Poly poly = new(v_idxs.Select(x => x.VIdx), e_idxs);
             PIdx p_idx = new(NextPolyIdx++);
             NewPolys[p_idx] = poly;
 
@@ -228,9 +240,9 @@ namespace SubD
             }
         }
 
-        private EIdx AddEdge(EdgeWithSharpness v1, EdgeWithSharpness v2, out bool is_left)
+        private EIdx AddEdge(AnnotatedVert v1, AnnotatedVert v2, out bool is_left)
         {
-            Edge edge = new(v1.Item1, v2.Item1);
+            Edge edge = new(v1.VIdx, v2.VIdx);
             Edge r_edge = edge.Reversed();
 
             // we should see each edge twice, once forwards, when it should be new, and once backwards
@@ -249,11 +261,14 @@ namespace SubD
 
             NewEdges[e_idx] = edge;
 
-            NewVerts[v1.Item1].AddEIdx(e_idx);
-            NewVerts[v2.Item1].AddEIdx(e_idx);
+            NewVerts[v1.VIdx].AddEIdx(e_idx);
+            NewVerts[v2.VIdx].AddEIdx(e_idx);
 
-            // we recorded the sharpness on the start vert
-            edge.IsSharp = v1.Item2;
+            // if there was an original edge, propogate metadata
+            if (v1.OriginalEdge != null)
+            {
+                edge.SetMetaDataFrom(v1.OriginalEdge);
+            }
 
             return e_idx;
         }

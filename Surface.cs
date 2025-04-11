@@ -4,20 +4,44 @@ using System.Linq;
 using EIdx = SubD.Idx<SubD.Edge>;
 using VIdx = SubD.Idx<SubD.Vert>;
 using PIdx = SubD.Idx<SubD.Poly>;
+
 using Godot;
 using System.Diagnostics;
-using System.Linq.Expressions;
+using System;
+using System.Reflection.Metadata.Ecma335;
 
 namespace SubD
 {
     [DebuggerDisplay("Verts = Vert.Count, Edges = Edge.Count, Faces = Face.Count")]
     public class Surface
     {
+        public class OutVert
+        {
+            public Vert Vert;
+            public Vector3 Normal;
+            public int OutIdx = -1;
+        }
+
         public BidirectionalDictionary<PIdx, Poly> Polys
         {
             get;
             private set;
         }
+
+        public BidirectionalDictionary<EIdx, Edge> Edges
+        {
+            get;
+            private set;
+        }
+
+        public BidirectionalDictionary<VIdx, Vert> Verts
+        {
+            get;
+            private set;
+        }
+
+        // mesh output workings, clear after each ToSurface
+        Dictionary<(PIdx, VIdx), OutVert> OutVerts = new();
 
         public IEnumerable<VIdx> PolyVIdxs(PIdx p_idx) => Polys[p_idx].VIdxs;
 
@@ -27,12 +51,6 @@ namespace SubD
 
         public IEnumerable<Edge> PolyEdges(PIdx p_idx) => PolyEIdxs(p_idx).Select(x => Edges[x]);
 
-        public BidirectionalDictionary<EIdx, Edge> Edges
-        {
-            get;
-            private set;
-        }
-
         public IEnumerable<VIdx> EdgeVIdxs(EIdx e_idx) => Edges[e_idx].VIdxs;
 
         public IEnumerable<Vert> EdgeVerts(EIdx e_idx) => EdgeVIdxs(e_idx).Select(x => Verts[x]);
@@ -40,12 +58,6 @@ namespace SubD
         public IEnumerable<PIdx> EdgePIdxs(EIdx e_idx) => Edges[e_idx].PIdxs;
 
         public IEnumerable<Poly> EdgePolys(EIdx e_idx) => EdgePIdxs(e_idx).Select(x => Polys[x]);
-
-        public BidirectionalDictionary<VIdx, Vert> Verts
-        {
-            get;
-            private set;
-        }
 
         public IEnumerable<EIdx> VertEIdxs(VIdx v_idx) => Verts[v_idx].EIdxs;
 
@@ -57,7 +69,7 @@ namespace SubD
 
         public Vector3 EdgeMidpoint(EIdx e_idx) => EdgeVerts(e_idx).Select(x => x.Position).Sum() / 2;
 
-        VIdx? GetVIdx(Vector3 pos)
+        public VIdx? GetVIdx(Vector3 pos)
         {
             Vert temp = new(pos);
             if (!Verts.Contains(temp))
@@ -130,7 +142,7 @@ namespace SubD
 
             if (poly.Normal == null)
             {
-                Vector3[] verts = PolyVerts(p_idx).Select(x => x.Position).ToArray();
+                Vector3[] verts = [.. PolyVerts(p_idx).Select(x => x.Position)];
 
                 Vector3 last_delta = verts[1] - verts[0];
 
@@ -153,25 +165,54 @@ namespace SubD
             return poly.Normal.Value;
         }
 
+        public Vector3 EdgeNormal(EIdx e_idx)
+        {
+            Edge edge = Edges[e_idx];
+
+            if (edge.Normal == null)
+            {
+                edge.Normal = edge.PIdxs.Select(x => PolyNormal(x)).Sum().Normalized();
+            }
+
+            return edge.Normal.Value;
+        }
+
         public Vector3 VertNormal(VIdx v_idx)
         {
             Vert vert = Verts[v_idx];
 
             if (vert.Normal == null)
             {
-                vert.Normal = vert.PIdxs.Select(x => PolyNormal(x)).Sum() / vert.PIdxs.Count();
+                vert.Normal = vert.PIdxs.Select(x => PolyNormal(x)).Sum().Normalized();
             }
 
             return vert.Normal.Value;
         }
+
+        public float FaceNormalsDotProduct(EIdx e_idx) => FaceNormalsDotProduct(Edges[e_idx]);
+
+        public float FaceNormalsDotProduct(Edge edge)
+        {
+            return PolyNormal(edge.Left.Value).Dot(PolyNormal(edge.Right.Value));
+        }
+
+        public Vector3 PolyCentre(PIdx p_idx)
+        {
+            return PolyVerts(p_idx).Select(x => x.Position).Sum() / Polys[p_idx].VIdxs.Length;
+        }
+
 
         public Surface(
             BidirectionalDictionary<VIdx, Vert> verts,
             BidirectionalDictionary<EIdx, Edge> edges,
             BidirectionalDictionary<PIdx, Poly> polys)
         {
-            // allow no more changes
-            foreach(Vert vert in verts.Values)
+            Verts = verts;
+            Edges = edges;
+            Polys = polys;
+
+            // allow no more (geometry) changes
+            foreach(Vert vert in Verts.Values)
             {
                 vert.Freeze();
             }
@@ -185,134 +226,460 @@ namespace SubD
 
             // debug-only topology validation
 #if DEBUG
-            foreach(var pair in verts)
+            foreach(var pair in Verts)
             {
                 // all verts which reference an edge should be referenced by the edge
-                foreach(Edge edge in pair.Value.EIdxs.Select(x => edges[x]))
+                foreach(Edge edge in pair.Value.EIdxs.Select(x => Edges[x]))
                 {
                     Util.Assert(edge.VIdxs.Contains(pair.Key));
                 }
 
                 // all verts which reference a poly should be referenced by the poly
-                foreach(Poly poly in pair.Value.PIdxs.Select(x => polys[x]))
+                foreach(Poly poly in pair.Value.PIdxs.Select(x => Polys[x]))
                 {
                     Util.Assert(poly.VIdxs.Contains(pair.Key));
                 }
+
+                PIdx[] vert_p_idxs = [.. VertPIdxs(pair.Key)];
+                Poly[] vert_polys = [.. vert_p_idxs.Select(x => Polys[x])];
+                EIdx[] vert_eidxs = [.. VertEIdxs(pair.Key)];
+
+                // poly N should lie between edges N and N + 1
+                for(int i = 0; i < vert_polys.Length; i++)
+                {
+                    Util.Assert(vert_polys[i].EIdxs.Contains(vert_eidxs[i]));
+                    Util.Assert(vert_polys[i].EIdxs.Contains(vert_eidxs[(i + 1) % vert_eidxs.Length]));
+                }
             }
 
-            foreach(var pair in edges)
+            foreach(var pair in Edges)
             {
                 Util.Assert(pair.Value.Left.HasValue);
                 Util.Assert(pair.Value.Right.HasValue);
 
                 // all edges which reference a vert should be referenced by the vert
-                foreach(Vert vert in pair.Value.VIdxs.Select(x => verts[x]))
+                foreach(Vert vert in pair.Value.VIdxs.Select(x => Verts[x]))
                 {
                     Util.Assert(vert.EIdxs.Contains(pair.Key));
                 }
 
                 // all edges which reference a poly should be referenced by the poly
-                foreach(Poly poly in pair.Value.PIdxs.Select(x => polys[x]))
+                foreach(Poly poly in pair.Value.PIdxs.Select(x => Polys[x]))
                 {
                     Util.Assert(poly.EIdxs.Contains(pair.Key));
                 }
             }
 
-            foreach(var pair in polys)
+            foreach(var pair in Polys)
             {
                 // all polys which reference a vert should be referenced by the vert
-                foreach(Vert vert in pair.Value.VIdxs.Select(x => verts[x]))
+                foreach(Vert vert in pair.Value.VIdxs.Select(x => Verts[x]))
                 {
                     Util.Assert(vert.PIdxs.Contains(pair.Key));
                 }
 
                 // all polys which reference an edge should be referenced by the edge
-                foreach(Edge edge in pair.Value.EIdxs.Select(x => edges[x]))
+                foreach(Edge edge in pair.Value.EIdxs.Select(x => Edges[x]))
                 {
                     Util.Assert(edge.PIdxs.Contains(pair.Key));
                 }
+
+                VIdx[] poly_v_idxs = [.. pair.Value.VIdxs];
+                Edge[] poly_edges = [.. pair.Value.EIdxs.Select(x => Edges[x])];
+
+                Util.Assert(poly_v_idxs.Length == poly_edges.Length);
+
+                // edge N should lie between Verts N and N + 1
+                for(int i = 0; i < poly_edges.Length; i++)
+                {
+                    int next_i = (i + 1) % poly_edges.Length;
+
+                    VIdx v1 = poly_v_idxs[i];
+                    VIdx v2 = poly_v_idxs[next_i];
+                    Edge edge = poly_edges[i];
+
+                    Util.Assert(edge.VIdxs.Contains(v1));
+                    Util.Assert(edge.VIdxs.Contains(v2));
+                }
             }
 #endif
-
-            Verts = verts;
-            Edges = edges;
-            Polys = polys;
         }
 
-        public Mesh ToMesh()
+        public enum MeshMode
         {
-            ArrayMesh mesh = new();
+            Surface,
+            Edges,
+            Normals
+        }
 
-            Dictionary<VIdx, int> vert_remap = new();
-            int next_vert_idx = 0;
+        public struct MeshOptions
+        {
+            public bool Edges_IncludeSharp = true;
+            public bool Edges_IncludeSmooth = true;
+            public bool Edges_DetermineSmoothnessFromAngle = false; //< if set, call edges "sharp" or "smooth" based on their tagging
+                                                                    //< otherwise determine that based on the adjoining faces angle
+                                                                    //< and SplitangleDegrees
 
-            // some verts can have been deleted, so we need to make the indices contiguous again
-            foreach(VIdx v_idx in Verts.Keys)
+            public Func<Edge, bool> Edges_Filter;                   //< if set, ignore above flags and include exactly the set of edges
+                                                                    //< for which this is true
+
+            public bool Normals_IncludeVert = false;
+            public bool Normals_IncludeSplitVert = false;
+            public bool Normals_IncludeEdge = false;               //< nothing uses these, but could be of interest
+            public bool Normals_IncludePoly = false;
+
+            public float? SplitAngleDegrees;                        //< if set, overrides splitting along edges tagged sharp
+                                                                    //< and instead splits along those with > this angle across them
+
+            public float DrawNormalsLength = 0.5f;                  //< reasonable if your input data is around unit sized
+
+            public MeshOptions()
             {
-                vert_remap[v_idx] = next_vert_idx++;
+            }
+        }
+
+        public Mesh ToMesh(MeshMode mesh_mode, MeshOptions? mesh_options = null)
+        {
+            MeshOptions options = mesh_options.HasValue ? mesh_options.Value : new MeshOptions();
+
+            bool use_angle = options.SplitAngleDegrees.HasValue;
+            if (use_angle)
+            {
+                float angle = options.SplitAngleDegrees.Value;
+                float cos_angle = MathF.Cos(angle * MathF.PI / 180);
+
+                foreach(var pair in Edges)
+                {
+                    EIdx e_idx = pair.Key;
+                    Edge edge = pair.Value;
+
+                    // edge normal dot-product is 1 for parallel edges, 0 for perpendicular
+                    // cos of the angle we want follows a similar pattern, and a lower cos is sharper
+                    // edge_angle could go -ve for >90 degrees
+                    float edge_angle = FaceNormalsDotProduct(e_idx);
+                    edge.IsObservedSharp = edge_angle <= cos_angle;
+                }
             }
 
-            Vector3[] verts = Verts.OrderBy(x => x.Key).Select(x => x.Value.Position).ToArray();
-            List<int> idxs = new();
-            Vector3[] normals = Verts.OrderBy(x => x.Key).Select(x => VertNormal(x.Key)).ToArray();
-
-            // split our polys apart into individual triangles
-            foreach(var p_idx in Polys.Keys)
+            foreach(var v_pair in Verts)
             {
-                VIdx[] v_idxs = PolyVIdxs(p_idx).ToArray();
+                VIdx v_idx = v_pair.Key;
+                Vert vert = v_pair.Value;
 
-                // build the poly from a fan of trianges around vert-0
-                for(int p = 1; p < v_idxs.Length - 1; p++)
+                bool force_all_separate_verts = vert.IsSharp;
+
+                EIdx[] vert_eidxs = [.. VertEIdxs(v_idx)];
+                PIdx[] vert_pidxs = [.. VertPIdxs(v_idx)];
+
+                EIdx first_e_idx = vert_eidxs.FirstOrDefault(x => force_all_separate_verts || Edges[x].IsSetSharp, EIdx.Empty);
+
+                if(first_e_idx == EIdx.Empty)
                 {
-                    idxs.Add(vert_remap[v_idxs[0]]);
-                    idxs.Add(vert_remap[v_idxs[p]]);
-                    idxs.Add(vert_remap[v_idxs[p + 1]]);
+                    first_e_idx = vert_eidxs.First();
+                }
+
+                int fei_idx = Array.IndexOf(vert_eidxs, first_e_idx);
+
+                if(fei_idx != 0)
+                {
+                    vert_eidxs = [.. vert_eidxs.Skip(fei_idx), .. vert_eidxs.Take(fei_idx)];
+                    vert_pidxs = [.. vert_pidxs.Skip(fei_idx), .. vert_pidxs.Take(fei_idx)];
+                }
+
+                // we should now have the edge and face-indexes cyclically permuted, such that if there is any sharp edge it is first
+                // (if there are >1 no problem)
+
+                OutVert current = null;
+                int num_polys = 0;
+
+                for(int i = 0; i < vert_eidxs.Length; i++)
+                {
+                    PIdx p_idx = vert_pidxs[i];
+                    Edge edge = Edges[vert_eidxs[i]];
+
+                    bool is_sharp = use_angle ? edge.IsObservedSharp : edge.IsSetSharp;
+
+                    if (is_sharp || current == null /* || force_all_separate_verts */)
+                    {
+                        if (current != null)
+                        {
+                            current.Normal = current.Normal.Normalized();
+                            num_polys = 0;
+                        }
+
+                        current = new()
+                        {
+                            Vert = Verts[v_idx]
+                        };
+                    }
+
+                    OutVerts[(p_idx, v_idx)] = current;
+                    current.Normal += PolyNormal(p_idx);
+                    num_polys++;
+                }
+
+                if (num_polys > 0)
+                {
+                    current.Normal = current.Normal.Normalized();
+                }
+            }
+
+            Mesh ret = null;
+
+            switch (mesh_mode)
+            {
+                case MeshMode.Surface:
+                    ret = OutputMeshSurface(options);
+                    break;
+
+                case MeshMode.Edges:
+                    ret = OutputMeshLines(options);
+                    break;
+
+                case MeshMode.Normals:
+                    ret = OutputMeshNormals(options);
+                    break;
+            }
+
+            // could keep this, keep a "clean" flag and only wipe/regenerate on next entry if not clean
+            // but that seems like a lot of data to hang onto on the off-chance...
+            OutVerts = new();
+
+            return ret;
+        }
+
+        private Mesh OutputMeshNormals(MeshOptions options)
+        {
+            List<Vector3> verts = new();
+            List<Vector3> normals = new();
+            List<int> idxs = new();
+
+            bool include_poly = options.Normals_IncludePoly;
+            bool include_edge = options.Normals_IncludeEdge;
+            bool include_vert = options.Normals_IncludeVert;
+            bool include_vert_split = options.Normals_IncludeSplitVert;
+
+            if (include_edge)
+            {
+                foreach(EIdx e_idx in Edges.Keys)
+                {
+                    Vector3 edge_centre = EdgeMidpoint(e_idx);
+                    Vector3 normal = EdgeNormal(e_idx);
+                    idxs.Add(verts.Count);
+                    verts.Add(edge_centre);
+                    normals.Add(normal);
+                    idxs.Add(verts.Count);
+                    verts.Add(edge_centre + normal * options.DrawNormalsLength);
+                    normals.Add(normal);
+                }
+            }
+
+            if (include_vert)
+            {
+                foreach(VIdx v_idx in Verts.Keys)
+                {
+                    Vector3 normal = VertNormal(v_idx);
+
+                    PIdx any_vert_poly = VertPIdxs(v_idx).First();
+                    OutVert out_vert = OutVerts[(any_vert_poly, v_idx)];
+                    idxs.Add(verts.Count);
+                    verts.Add(out_vert.Vert.Position);
+                    normals.Add(normal);
+                    idxs.Add(verts.Count);
+                    verts.Add(out_vert.Vert.Position + normal * options.DrawNormalsLength);
+                    normals.Add(normal);
+                }
+            }
+
+            if (include_vert_split)
+            {
+                foreach(OutVert out_vert in OutVerts.Values)
+                {
+                    idxs.Add(verts.Count);
+                    verts.Add(out_vert.Vert.Position);
+                    normals.Add(out_vert.Normal);
+                    idxs.Add(verts.Count);
+                    verts.Add(out_vert.Vert.Position + out_vert.Normal * options.DrawNormalsLength);
+                    normals.Add(out_vert.Normal);
+                }
+            }
+
+            if (include_poly)
+            {
+                foreach(PIdx p_idx in Polys.Keys)
+                {
+                    Vector3 centre = PolyCentre(p_idx);
+                    Vector3 normal = PolyNormal(p_idx);
+
+                    idxs.Add(verts.Count);
+                    verts.Add(centre);
+                    normals.Add(normal);
+                    idxs.Add(verts.Count);
+                    verts.Add(centre + normal * options.DrawNormalsLength);
+                    normals.Add(normal);
                 }
             }
 
             var arrays = new Godot.Collections.Array();
             arrays.Resize((int)Mesh.ArrayType.Max);
-            arrays[(int)Mesh.ArrayType.Vertex] = verts;
+            arrays[(int)Mesh.ArrayType.Vertex] = verts.ToArray();
             arrays[(int)Mesh.ArrayType.Index] = idxs.ToArray();
-            arrays[(int)Mesh.ArrayType.Normal] = normals;
+            arrays[(int)Mesh.ArrayType.Normal] = normals.ToArray();
 
-            // Create the Mesh.
-            mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+            ArrayMesh mesh = new();
+
+            // there can be no indices, if we picked too restrictive options, and AddSurfaceFromArrays doesn't like that
+            if (idxs.Any())
+            {
+                // Create the Mesh.
+                mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Lines, arrays);
+            }
 
             return mesh;
         }
 
-         public Mesh ToMeshLines(bool sharp_only)
+        private Mesh OutputMeshLines(MeshOptions options)
         {
-            ArrayMesh mesh = new();
+            List<Vector3> verts = new();
+            List<Vector3> normals = new();
+            List<int> idxs = new();
 
-            Dictionary<VIdx, int> vert_remap = new();
-            int next_vert_idx = 0;
+            bool include_sharp = options.Edges_IncludeSharp;
+            bool include_smooth = options.Edges_IncludeSmooth;
+            bool use_angle = options.Edges_DetermineSmoothnessFromAngle;
+            bool use_filter = options.Edges_Filter != null;
 
-            // some verts can have been deleted, so we need to make the indices contiguous again
-            foreach(VIdx v_idx in Verts.Keys)
+            foreach(var pair in Polys)
             {
-                vert_remap[v_idx] = next_vert_idx++;
+                PIdx p_idx = pair.Key;
+                Poly poly = pair.Value;
+
+                foreach(VIdx v_idx in poly.VIdxs)
+                {
+                    OutVert out_vert = OutVerts[(p_idx, v_idx)];
+                    if (out_vert.OutIdx == -1)
+                    {
+                        out_vert.OutIdx = verts.Count;
+                        verts.Add(out_vert.Vert.Position);
+                        normals.Add(out_vert.Normal);
+                    }
+                }
             }
 
-            Vector3[] verts = Verts.OrderBy(x => x.Key).Select(x => x.Value.Position).ToArray();
-            List<int> idxs = new();
-            Vector3[] normals = Verts.OrderBy(x => x.Key).Select(x => VertNormal(x.Key)).ToArray();
-
-            foreach(Edge edge in Edges.Values.Where(x => !sharp_only || x.IsSharp))
+            foreach(PIdx p_idx in Polys.Keys)
             {
-                idxs.Add(vert_remap[edge.Start]);
-                idxs.Add(vert_remap[edge.End]);
+                // we will output each line twice, once for each adjoiing poly
+                // but those polys have different normals, so *not* doing this loses info
+                // OTOH even doing it, one will be invisible or there will be Z-fighgint
+                //
+                // a more-correct approach might be to shift the edges 1 pixel *in* to their face
+                // so both can show, but that would require shader magic, I suspect...
+                foreach(Edge edge in PolyEdges(p_idx))
+                {
+                    if (use_filter)
+                    {
+                        if (!options.Edges_Filter(edge))
+                        {
+                            continue;
+                        }
+                    }
+                    else if (!include_sharp || !include_smooth) //< otherwise we are including everything and can skip this complexity
+                    {
+                        bool is_sharp = false;
+
+                        if (use_angle)
+                        {
+                            is_sharp = edge.IsObservedSharp;
+                        }
+                        else
+                        {
+                            is_sharp = edge.IsSetSharp;
+                        }
+
+                        if (is_sharp && !include_sharp)
+                        {
+                            continue;
+                        }
+
+                        if (!is_sharp && !include_smooth)
+                        {
+                            continue;
+                        }
+                    }
+
+                    idxs.Add(OutVerts[(p_idx, edge.Start)].OutIdx);
+                    idxs.Add(OutVerts[(p_idx, edge.End)].OutIdx);
+                }
             }
 
             var arrays = new Godot.Collections.Array();
             arrays.Resize((int)Mesh.ArrayType.Max);
-            arrays[(int)Mesh.ArrayType.Vertex] = verts;
+            arrays[(int)Mesh.ArrayType.Vertex] = verts.ToArray();
             arrays[(int)Mesh.ArrayType.Index] = idxs.ToArray();
-            arrays[(int)Mesh.ArrayType.Normal] = normals;
+            arrays[(int)Mesh.ArrayType.Normal] = normals.ToArray();
+
+            ArrayMesh mesh = new();
+
+            // there can be no indices, if we picked too restrictive options, and AddSurfaceFromArrays doesn't like that
+            if (idxs.Any())
+            {
+                // Create the Mesh.
+                mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Lines, arrays);
+            }
+
+            return mesh;
+        }
+
+        private Mesh OutputMeshSurface(MeshOptions options)
+        {
+            List<Vector3> verts = new();
+            List<Vector3> normals = new();
+            List<int> idxs = new();
+
+            foreach(var pair in Polys)
+            {
+                PIdx p_idx = pair.Key;
+                Poly poly = pair.Value;
+
+                foreach(VIdx v_idx in poly.VIdxs)
+                {
+                    OutVert out_vert = OutVerts[(p_idx, v_idx)];
+                    if (out_vert.OutIdx == -1)
+                    {
+                        out_vert.OutIdx = verts.Count;
+                        verts.Add(out_vert.Vert.Position);
+                        normals.Add(out_vert.Normal);
+                    }
+                }
+            }
+
+            // split our polys apart into individual triangles
+            foreach(var pair in Polys)
+            {
+                PIdx p_idx = pair.Key;
+                Poly poly = pair.Value;
+
+                int vert_0_idx = OutVerts[(p_idx, poly.VIdxs[0])].OutIdx;
+
+                // build the poly from a fan of trianges around vert-0
+                for(int p = 1; p < poly.VIdxs.Length - 1; p++)
+                {
+                    idxs.Add(vert_0_idx);
+                    idxs.Add(OutVerts[(p_idx, poly.VIdxs[p])].OutIdx);
+                    idxs.Add(OutVerts[(p_idx, poly.VIdxs[p + 1])].OutIdx);
+                }
+            }
+
+            var arrays = new Godot.Collections.Array();
+            arrays.Resize((int)Mesh.ArrayType.Max);
+            arrays[(int)Mesh.ArrayType.Vertex] = verts.ToArray();
+            arrays[(int)Mesh.ArrayType.Index] = idxs.ToArray();
+            arrays[(int)Mesh.ArrayType.Normal] = normals.ToArray();
+
+            ArrayMesh mesh = new();
 
             // Create the Mesh.
-            mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Lines, arrays);
+            mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
 
             return mesh;
         }

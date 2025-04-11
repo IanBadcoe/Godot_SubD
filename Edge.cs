@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using Godot;
 using PIdx = SubD.Idx<SubD.Poly>;
 using VIdx = SubD.Idx<SubD.Vert>;
 
@@ -21,10 +22,36 @@ namespace SubD
             private set;
         }
 
-        public bool IsSharp {
+#region cached_data
+        // whether our angle measures as "sharp" and our normal
+        // are just things we cache here
+        // we could store them elsewhere (Surface, and CatmullClarkSubdivider, resp.)
+        public bool IsObservedSharp
+        {
             get;
             set;
         }
+
+        public Vector3? Normal
+        {
+            get;
+            set;
+        }
+#endregion
+
+#region metadata
+        // meta data is used by algorithms which act on us
+        // and needs propogating when the edge is split
+        public bool IsSetSharp {
+            get;
+            set;
+        }
+
+        public string Tag {
+            get;
+            set;
+        }
+#endregion
 
         // ideally we would be a const object, but construction is quite spread out in time and having a separate "builder" version of this
         // (and vert, and maybe poly) would be a pain, so let's instead have a "Freeze" operation at the end of construction
@@ -196,6 +223,12 @@ namespace SubD
         public override int GetHashCode()
         {
             return HashCode.Combine(Start.GetHashCode(), End.GetHashCode());
+        }
+
+        public void SetMetaDataFrom(Edge original_edge)
+        {
+            IsSetSharp = original_edge.IsSetSharp;
+            Tag = original_edge.Tag;
         }
     }
 }

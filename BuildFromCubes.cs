@@ -61,6 +61,10 @@ namespace SubD
 
         Dictionary<EdgeName, bool> EdgeSharpnessInner = EdgeNameUtils.AllEdges.ToDictionary(x => x, x => false);
 
+        Dictionary<VertName, string> VertTagsInner = VertNameUtils.AllVerts.ToDictionary(x => x, x => "");
+
+        Dictionary<EdgeName, string> EdgeTagsInner = EdgeNameUtils.AllEdges.ToDictionary(x => x, x => "");
+
         public Vector3I Position
         {
             get;
@@ -71,6 +75,9 @@ namespace SubD
         {
             IsVertSharp = new IndexedProperty<VertName, bool>(VertSharpnessInner, false);
             IsEdgeSharp = new IndexedProperty<EdgeName, bool>(EdgeSharpnessInner, false);
+
+            VertTag = new IndexedProperty<VertName, string>(VertTagsInner, false);
+            EdgeTag = new IndexedProperty<EdgeName, string>(EdgeTagsInner, false);
         }
 
         public Cube(Vector3I position)
@@ -81,6 +88,8 @@ namespace SubD
 
         public IndexedProperty<VertName, bool> IsVertSharp;
         public IndexedProperty<EdgeName, bool> IsEdgeSharp;
+        public IndexedProperty<VertName, string> VertTag;
+        public IndexedProperty<EdgeName, string> EdgeTag;
 
         static readonly Dictionary<VertName, Vector3> VertOffsets = new() {
             { VertName.BottomBackLeft, new Vector3(-0.5f, -0.5f, -0.5f) },
@@ -381,7 +390,7 @@ namespace SubD
 
         public void RemoveCube(Vector3I position)
         {
-            Cubes = Cubes.Where(x => x.Position != position).ToList();
+            Cubes = [.. Cubes.Where(x => x.Position != position)];
         }
 
         public Surface ToSurface(bool reset_after = true)
@@ -406,7 +415,7 @@ namespace SubD
                 // face that wants to take an edge from an old one
                 foreach(var f_name in FaceNameUtils.AllFaces)
                 {
-                    VIdx[] globally_indexed_face = FaceNameUtils.GetVertsForFace(f_name).Select(x => cube.VertMap[x]).ToArray();
+                    VIdx[] globally_indexed_face = [.. FaceNameUtils.GetVertsForFace(f_name).Select(x => cube.VertMap[x])];
 
                     if (!ResolveOppositeFaces(globally_indexed_face))
                     {
@@ -420,11 +429,13 @@ namespace SubD
                     List<Edge> left_edges = new();
                     List<Edge> right_edges = new();
 
-                    VIdx prev_v_idx = globally_indexed_face.Last();
-
-                    foreach(VIdx v_idx in globally_indexed_face)
+                    for(int i = 0; i < globally_indexed_face.Length; i++)
                     {
-                        Edge edge = new(prev_v_idx, v_idx);
+                        VIdx v_idx = globally_indexed_face[i];
+                        int next_i = (i + 1) % globally_indexed_face.Length;
+                        VIdx next_v_idx = globally_indexed_face[next_i];
+
+                        Edge edge = new(v_idx, next_v_idx);
                         Edge r_edge = edge.Reversed();
 
                         if (Edges.Contains(edge))
@@ -457,28 +468,35 @@ namespace SubD
                             Verts[edge.Start].AddEIdx(e_idx);
                             Verts[edge.End].AddEIdx(e_idx);
                         }
-
-                        prev_v_idx = v_idx;
                     }
 
                     foreach(Cube.EdgeName e_name in EdgeNameUtils.AllEdges)
                     {
+                        // surely this can be made easier???
+                        (Cube.VertName v1_name, Cube.VertName v2_name) = EdgeNameUtils.GetEdgeVerts(e_name);
+
+                        VIdx v1 = cube.VertMap[v1_name];
+                        VIdx v2 = cube.VertMap[v2_name];
+
+                        Edge edge = new Edge(v1, v2);
+
+                        EIdx? real_e_idx = Edges.Contains(edge) ? Edges[edge] : Edges.Contains(edge.Reversed()) ? Edges[edge.Reversed()] : null;
+
+                        // edge may have been removed as internal geometry
+                        if (!real_e_idx.HasValue)
+                        {
+                            continue;
+                        }
+
                         if (cube.Cube.IsEdgeSharp[e_name])
                         {
-                            // surely this can be made easier???
-                            (Cube.VertName v1_name, Cube.VertName v2_name) = EdgeNameUtils.GetEdgeVerts(e_name);
+                            Edges[real_e_idx.Value].IsSetSharp = true;
+                        }
 
-                            VIdx v1 = cube.VertMap[v1_name];
-                            VIdx v2 = cube.VertMap[v2_name];
-
-                            Edge edge = new Edge(v1, v2);
-
-                            EIdx? real_e_idx = Edges.Contains(edge) ? Edges[edge] : Edges.Contains(edge.Reversed()) ? Edges[edge.Reversed()] : null;
-
-                            if (real_e_idx.HasValue)
-                            {
-                                Edges[real_e_idx.Value].IsSharp = true;
-                            }
+                        string edge_tag = cube.Cube.EdgeTag[e_name];
+                        if (!string.IsNullOrEmpty(edge_tag))
+                        {
+                            Edges[real_e_idx.Value].Tag = edge_tag;
                         }
                     }
 
@@ -507,6 +525,16 @@ namespace SubD
                 }
             }
 
+            foreach(VIdx v_idx in Verts.Keys)
+            {
+                Vert old_vert = Verts[v_idx];
+                // we added the edges and polys to the verts in a fairly arbitraty order, but we need
+                // them to both be clockwise, from outside the cube, looking inwards, and...
+                //
+                // we need the two edges of the poly at position N to be N and N + 1
+                Verts[v_idx] = VertUtil.ToVertWithSortedEdgesAndPolys(old_vert, v_idx, Edges, Polys);
+            }
+
             Surface ret = new Surface(Verts, Edges, Polys);
 
             if (reset_after)
@@ -519,10 +547,10 @@ namespace SubD
 
         private bool ResolveOppositeFaces(VIdx[] v_idxs)
         {
-            VIdx[] v_r_temp = Poly.StandardiseVIdxOrder(v_idxs.Reverse()).ToArray();
+            VIdx[] v_r_temp = [.. Poly.StandardiseVIdxOrder(v_idxs.Reverse())];
 
 #if DEBUG
-            VIdx[] v_temp = Poly.StandardiseVIdxOrder(v_idxs).ToArray();
+            VIdx[] v_temp = [.. Poly.StandardiseVIdxOrder(v_idxs)];
 #endif
 
             foreach(var pair in Polys)
@@ -609,6 +637,11 @@ namespace SubD
                 if (cube.IsVertSharp[v_name])
                 {
                     vert.IsSharp = true;
+                }
+
+                if (!string.IsNullOrEmpty(cube.VertTag[v_name]))
+                {
+                    vert.Tag = cube.VertTag[v_name];
                 }
 
                 ret[v_name] = Verts[vert];

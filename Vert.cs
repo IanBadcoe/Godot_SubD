@@ -25,26 +25,35 @@ namespace SubD
         public List<EIdx> EIdxsInner = new();
         public EIdx[] EIdxs
         {
-            get => EIdxsInner.ToArray();
+            get => [.. EIdxsInner];
         }
 
         public List<PIdx> PIdxsInner = new();
         public PIdx[] PIdxs
         {
-            get => PIdxsInner.ToArray();
+            get => [.. PIdxsInner];
         }
 
-        // a place to cache it when calculated by the Surface
+        // normal is cached on here when calculated by the Surface
+        // could just cache that inside the Surface
         public Vector3? Normal
         {
             get;
             set;
         }
 
+#region metadata
+        // metadata, used by other algorithms, needs propogating when verts are copied to a new Surface
         public bool IsSharp {
             get;
             set;
         }
+
+        public string Tag {
+            get;
+            set;
+        }
+#endregion
 
         public void AddEIdx(EIdx e_idx)
         {
@@ -82,8 +91,8 @@ namespace SubD
 
         public Vert(Vector3 pos, IEnumerable<EIdx> e_idxs, IEnumerable<PIdx> p_idxs) : this(pos)
         {
-            EIdxsInner = e_idxs.ToList();
-            PIdxsInner = p_idxs.ToList();
+            EIdxsInner = [.. e_idxs];
+            PIdxsInner = [.. p_idxs];
         }
 
         public static bool operator==(Vert lhs, Vert rhs)
@@ -151,9 +160,15 @@ namespace SubD
                 ret = new Vert(Position, EIdxs, PIdxs);
             }
 
-            ret.IsSharp = IsSharp;
+            ret.SetMetadataFrom(this);
 
             return ret;
+        }
+
+        public void SetMetadataFrom(Vert original_vert)
+        {
+            IsSharp = original_vert.IsSharp;
+            Tag = original_vert.Tag;
         }
     }
 }

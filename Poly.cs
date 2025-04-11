@@ -52,15 +52,15 @@ namespace SubD
 
         public Poly(IEnumerable<VIdx> v_idxs, IEnumerable<EIdx> e_idxs)
         {
-            // rotete-permute verts and edges into a standard order so we can compare
+            // rotate-permute verts and edges into a standard order so we can compare
             // polys from different sources
             int where;
-            VIdxs = StandardiseVIdxOrder(v_idxs, out where).ToArray();
+            VIdxs = [.. StandardiseVIdxOrder(v_idxs, out where)];
 
             var temp_es = e_idxs.ToArray();
 
             // permute the edges the same, to preserve the relationship
-            EIdxs =  temp_es.Skip(where).Concat(temp_es.Take(where)).ToArray();
+            EIdxs =  [.. temp_es.Skip(where), .. temp_es.Take(where)];
         }
 
         public static bool operator==(Poly lhs, Poly rhs)
