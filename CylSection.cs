@@ -62,12 +62,6 @@ namespace SubD
             private set;
         }
 
-        public float Length
-        {
-            get;
-            private set;
-        }
-
         public int Sections
         {
             get;
@@ -86,14 +80,7 @@ namespace SubD
             private set;
         }
 
-        // could be covered with a Y-rotation in the transform?
-        public float OffsetAngleDegrees
-        {
-            get;
-            private set;
-        }
-
-        public Transform3D? Transform
+        public Transform3D Transform
         {
             get;
             private set;
@@ -105,20 +92,36 @@ namespace SubD
             int sections = 6,
             SectionSolidity solidity = SectionSolidity.Solid,
             float thickness = 1,
-            float offset_angle_degrees = 0,
-            Transform3D? transform = null)
+            float offset_angle_degrees = 0)
         {
             Radius = radius;
-            Length = length;
 
             Sections = sections;
 
             Solidity = solidity;
             Thickness = thickness;
 
-            OffsetAngleDegrees = offset_angle_degrees;
+            Transform =
+                Transform3D.Identity
+                .RotatedLocal(new Vector3(0, 1, 0), offset_angle_degrees)
+                .Translated(new Vector3(0, length, 0));
+        }
 
-            Transform = transform;
+        public CylSection(
+            float radius = 3,
+            int sections = 6,
+            SectionSolidity solidity = SectionSolidity.Solid,
+            float thickness = 1,
+            Transform3D? transform = null)
+        {
+            Radius = radius;
+
+            Sections = sections;
+
+            Solidity = solidity;
+            Thickness = thickness;
+
+            Transform = transform ?? Transform3D.Identity;
         }
     }
 }

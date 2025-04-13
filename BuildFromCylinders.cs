@@ -53,6 +53,8 @@ namespace SubD
                 return null;
             }
 
+            Transform3D transform = Transform3D.Identity;
+
             for(int i = 0; i < num_sections; i++)
             {
                 CylSection sect = Sections[i];
@@ -66,17 +68,16 @@ namespace SubD
                 // we only ever make any Vert once, meaning it is unique to this usage, even if a subsequent
                 // Vert is placed at the same location, which in turn makes all Edges/EIdxs context dependent as well
 
+                transform = transform * sect.Transform;
+
                 // literally everything has an outer loop
-                VertLoop outer_loop = MakeOuterLoop(sect, height);
-                VertLoop inner_loop = is_section_hollow ? MakeInnerLoop(sect, height) : null;
+                VertLoop outer_loop = MakeOuterLoop(sect, transform);
+                VertLoop inner_loop = is_section_hollow ? MakeInnerLoop(sect, transform) : null;
 
                 if (!is_first_section)
                 {
                     // always need this, except on the very first section where there is no prev_section_outer
                     JoinLoops(prev_outer_loop, outer_loop);
-
-                    // first section has no height as there is no previous section to measure it from
-                    height += sect.Length;
                 }
 
                 if (is_first_section)
@@ -281,17 +282,19 @@ namespace SubD
             }
         }
 
-        VertLoop MakeOuterLoop(CylSection sect, float height) => new(LoopVertGenerator(sect.Radius, sect.Sections, sect.OffsetAngleDegrees, height));
+        VertLoop MakeOuterLoop(CylSection sect, Transform3D trans) => new(LoopVertGenerator(sect.Radius, sect.Sections, trans));
 
-        VertLoop MakeInnerLoop(CylSection sect, float height) => new(LoopVertGenerator(sect.Radius - sect.Thickness, sect.Sections, sect.OffsetAngleDegrees, height));
+        VertLoop MakeInnerLoop(CylSection sect, Transform3D trans) => new(LoopVertGenerator(sect.Radius - sect.Thickness, sect.Sections, trans));
 
-        IEnumerable<VIdx> LoopVertGenerator(float radius, int sections, float angle_offset_degrees, float height)
+        IEnumerable<VIdx> LoopVertGenerator(float radius, int sections, Transform3D trans)
         {
             for(int i = 0; i < sections; i++)
             {
-                float angle = angle_offset_degrees + i * Mathf.Pi * 2.0f / sections;
+                float angle = i * Mathf.Pi * 2.0f / sections;
 
-                Vector3 pos = new(MathF.Cos(angle) * radius, height, MathF.Sin(angle) * radius);
+                Vector3 pos = new(MathF.Cos(angle) * radius, 0, MathF.Sin(angle) * radius);
+
+                pos = trans * pos;
 
                 Vert vert = new(pos);
 
