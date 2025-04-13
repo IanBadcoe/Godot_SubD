@@ -37,7 +37,6 @@ namespace SubD
         public Surface ToSurface()
         {
             bool was_prev_section_hollow = false;
-            float height = 0;
 
             VertLoop prev_inner_loop = null;
             VertLoop prev_outer_loop = null;
