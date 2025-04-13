@@ -9,14 +9,26 @@ namespace SubD
     [DebuggerDisplay("{Forwards.Count} {ReverseInner.Count}")]
     public class BidirectionalDictionary<T1, T2> : IEnumerable<KeyValuePair<T1, T2>>
     {
-        Dictionary<T1, T2> Forwards = new();
+        Dictionary<T1, T2> Forwards = [];
 
-        Dictionary<T2, T1> ReverseInner = new();
+        Dictionary<T2, T1> ReverseInner = [];
 
-        // cannot implement two x IEnumerable ifaces on the same class, so get reverse iteration from this
-        public IEnumerable<KeyValuePair<T2, T1>> Reverse
+        public BidirectionalDictionary() {}
+
+        public BidirectionalDictionary(Dictionary<T1, T2> pairs)
         {
-            get => ReverseInner;
+            foreach(var pair in pairs)
+            {
+                this[pair.Key] = pair.Value;
+            }
+        }
+
+        public BidirectionalDictionary(Dictionary<T2, T1> pairs)
+        {
+            foreach(var pair in pairs)
+            {
+                this[pair.Key] = pair.Value;
+            }
         }
 
         public T1 this [T2 idx]

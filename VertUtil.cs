@@ -11,10 +11,13 @@ namespace SubD
 {
     public static class VertUtil
     {
-        public static Vert ToVertWithSortedEdgesAndPolys(Vert vert, VIdx v_idx, BidirectionalDictionary<EIdx, Edge> edges, BidirectionalDictionary<PIdx, Poly> polys)
+        public static Vert ToVertWithSortedEdgesAndPolys(
+            Vert vert, VIdx v_idx,
+            BidirectionalDictionary<EIdx, Edge> edges,
+            Dictionary<PIdx, Poly> polys)
         {
-            List<EIdx> edges_ordered = new();
-            List<PIdx> polys_ordered = new();
+            List<EIdx> edges_ordered = [];
+            List<PIdx> polys_ordered = [];
 
             // number of polys is the same
             int num_edges = vert.EIdxs.Length;
@@ -47,7 +50,7 @@ namespace SubD
                 e_idx = poly.EIdxs[(e_idx_idx_in_poly + poly.EIdxs.Length - 1) % poly.EIdxs.Length];
             } while (edges_ordered.Count < num_edges);
 
-            Vert new_vert = new Vert(vert.Position, edges_ordered, polys_ordered);
+            Vert new_vert = new(vert.Position, edges_ordered, polys_ordered);
             new_vert.SetMetadataFrom(vert);
 
             return new_vert;

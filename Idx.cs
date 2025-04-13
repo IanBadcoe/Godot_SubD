@@ -60,6 +60,6 @@ namespace SubD
             // :-D
             return idx.Value.Value.ToString();
         }
-        public readonly static Idx<IdxType> Empty = new Idx<IdxType>(-1);
+        public readonly static Idx<IdxType> Empty = new(-1);
     }
 }

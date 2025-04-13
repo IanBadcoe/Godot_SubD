@@ -372,7 +372,7 @@ namespace SubD
         List<Cube> Cubes;
         BidirectionalDictionary<VIdx, Vert> Verts;
         BidirectionalDictionary<EIdx, Edge> Edges;
-        BidirectionalDictionary<PIdx, Poly> Polys;
+        Dictionary<PIdx, Poly> Polys;
 
         public BuildFromCubes()
         {
@@ -393,9 +393,11 @@ namespace SubD
             Cubes = [.. Cubes.Where(x => x.Position != position)];
         }
 
-        public Surface ToSurface(bool reset_after = true)
+        // could have option not to reset afterwards, but no point unless we also have a way to
+        // come back and make use of the kept data
+        public Surface ToSurface(/* bool reset_after = true*/)
         {
-            List<IdxCube> idx_cubes = new();
+            List<IdxCube> idx_cubes = [];
 
             foreach(var cube in Cubes)
             {
@@ -406,7 +408,7 @@ namespace SubD
             {
                 // Debug.Print($"Cube: {cube.Centre}");
 
-                List<VIdx[]> real_faces = new();
+                List<VIdx[]> real_faces = [];
 
                 // if any face is the negative of some other face, then instead of adding this one, we need to remove the other
                 // so that the two cubes join
@@ -425,9 +427,9 @@ namespace SubD
 
                 foreach(VIdx[] globally_indexed_face in real_faces)
                 {
-                    List<EIdx> face_edges = new();
-                    List<Edge> left_edges = new();
-                    List<Edge> right_edges = new();
+                    List<EIdx> face_edges = [];
+                    List<Edge> left_edges = [];
+                    List<Edge> right_edges = [];
 
                     for(int i = 0; i < globally_indexed_face.Length; i++)
                     {
@@ -478,7 +480,7 @@ namespace SubD
                         VIdx v1 = cube.VertMap[v1_name];
                         VIdx v2 = cube.VertMap[v2_name];
 
-                        Edge edge = new Edge(v1, v2);
+                        Edge edge = new(v1, v2);
 
                         EIdx? real_e_idx = Edges.Contains(edge) ? Edges[edge] : Edges.Contains(edge.Reversed()) ? Edges[edge.Reversed()] : null;
 
@@ -503,7 +505,7 @@ namespace SubD
                     Poly poly = new(globally_indexed_face, face_edges);
 
                     PIdx p_idx = new(NextPolyIdx++);
-                    Polys[poly] = p_idx;
+                    Polys[p_idx] = poly;
 
                     // it's a new poly, so let all the verts know
                     foreach(Vert vert in poly.VIdxs.Select(x => Verts[x]))
@@ -535,12 +537,12 @@ namespace SubD
                 Verts[v_idx] = VertUtil.ToVertWithSortedEdgesAndPolys(old_vert, v_idx, Edges, Polys);
             }
 
-            Surface ret = new Surface(Verts, Edges, Polys);
+            Surface ret = new(Verts, Edges, Polys);
 
-            if (reset_after)
-            {
+            // if (reset_after)
+            // {
                 Reset();
-            }
+            // }
 
             return ret;
         }
@@ -574,9 +576,10 @@ namespace SubD
 
         private void RemovePoly(PIdx p_idx)
         {
-            Poly poly = Polys.Remove(p_idx);
+            Poly poly = Polys[p_idx];
+            Polys.Remove(p_idx);
 
-            List<Tuple<EIdx, Edge>> removed_edges = new();
+            List<Tuple<EIdx, Edge>> removed_edges = [];
 
             foreach(Edge edge in poly.EIdxs.Select(x => Edges[x]))
             {
@@ -620,7 +623,7 @@ namespace SubD
 
         IDictionary<Cube.VertName, VIdx> CubeToIdxVerts(Cube cube)
         {
-            Dictionary<Cube.VertName, VIdx> ret = new();
+            Dictionary<Cube.VertName, VIdx> ret = [];
 
             foreach(Cube.VertName v_name in VertNameUtils.AllVerts)
             {
@@ -656,11 +659,11 @@ namespace SubD
             NextEdgeIdx = 0;
             NextPolyIdx = 0;
 
-            Cubes = new();
+            Cubes = [];
 
             Verts = new();
             Edges = new();
-            Polys = new();
+            Polys = [];
         }
     }
 }

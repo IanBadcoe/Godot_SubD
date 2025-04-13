@@ -29,7 +29,7 @@ namespace SubD
 
         BidirectionalDictionary<VIdx, Vert> NewVerts;
         BidirectionalDictionary<EIdx, Edge> NewEdges;
-        BidirectionalDictionary<PIdx, Poly> NewPolys;
+        Dictionary<PIdx, Poly> NewPolys;
 
         public Surface Subdivide(Surface input)
         {
@@ -41,9 +41,9 @@ namespace SubD
             // all cloned verts are unfrozen and do not have cached Normals
             NewVerts = CloneVerts(input.Verts);
             NewEdges = new BidirectionalDictionary<EIdx, Edge>();
-            NewPolys = new BidirectionalDictionary<PIdx, Poly>();
+            NewPolys = [];
 
-            Dictionary<PIdx, VIdx> face_centre_map = new();
+            Dictionary<PIdx, VIdx> face_centre_map = [];
 
             // inject face centre verts
             foreach(var pair in input.Polys)
@@ -53,7 +53,7 @@ namespace SubD
                 face_centre_map[pair.Key] = v_idx;
             }
 
-            Dictionary<EIdx, VIdx> edge_centre_map = new();
+            Dictionary<EIdx, VIdx> edge_centre_map = [];
 
             // inject edge centre verts
             foreach(var pair in input.Edges)
@@ -201,9 +201,9 @@ namespace SubD
 
         private void AddPoly(AnnotatedVert[] v_idxs)
         {
-            List<EIdx> e_idxs = new();
-            List<Edge> left_edges = new();
-            List<Edge> right_edges = new();
+            List<EIdx> e_idxs = [];
+            List<Edge> left_edges = [];
+            List<Edge> right_edges = [];
 
             for(int i = 0; i < v_idxs.Length; i++)
             {

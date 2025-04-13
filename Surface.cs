@@ -22,7 +22,7 @@ namespace SubD
             public int OutIdx = -1;
         }
 
-        public BidirectionalDictionary<PIdx, Poly> Polys
+        public Dictionary<PIdx, Poly> Polys
         {
             get;
             private set;
@@ -41,7 +41,7 @@ namespace SubD
         }
 
         // mesh output workings, clear after each ToSurface
-        Dictionary<(PIdx, VIdx), OutVert> OutVerts = new();
+        Dictionary<(PIdx, VIdx), OutVert> OutVerts = [];
 
         public IEnumerable<VIdx> PolyVIdxs(PIdx p_idx) => Polys[p_idx].VIdxs;
 
@@ -201,11 +201,17 @@ namespace SubD
             return PolyVerts(p_idx).Select(x => x.Position).Sum() / Polys[p_idx].VIdxs.Length;
         }
 
+        public Surface(
+            Dictionary<VIdx, Vert> verts,
+            BidirectionalDictionary<EIdx, Edge> edges,
+            Dictionary<PIdx, Poly> polys)
+            : this(new BidirectionalDictionary<VIdx, Vert>(verts), edges, polys)
+        {}
 
         public Surface(
             BidirectionalDictionary<VIdx, Vert> verts,
             BidirectionalDictionary<EIdx, Edge> edges,
-            BidirectionalDictionary<PIdx, Poly> polys)
+            Dictionary<PIdx, Poly> polys)
         {
             Verts = verts;
             Edges = edges;
@@ -443,16 +449,16 @@ namespace SubD
 
             // could keep this, keep a "clean" flag and only wipe/regenerate on next entry if not clean
             // but that seems like a lot of data to hang onto on the off-chance...
-            OutVerts = new();
+            OutVerts = [];
 
             return ret;
         }
 
         private Mesh OutputMeshNormals(MeshOptions options)
         {
-            List<Vector3> verts = new();
-            List<Vector3> normals = new();
-            List<int> idxs = new();
+            List<Vector3> verts = [];
+            List<Vector3> normals = [];
+            List<int> idxs = [];
 
             bool include_poly = options.Normals_IncludePoly;
             bool include_edge = options.Normals_IncludeEdge;
@@ -540,9 +546,9 @@ namespace SubD
 
         private Mesh OutputMeshLines(MeshOptions options)
         {
-            List<Vector3> verts = new();
-            List<Vector3> normals = new();
-            List<int> idxs = new();
+            List<Vector3> verts = [];
+            List<Vector3> normals = [];
+            List<int> idxs = [];
 
             bool include_sharp = options.Edges_IncludeSharp;
             bool include_smooth = options.Edges_IncludeSmooth;
@@ -632,9 +638,9 @@ namespace SubD
 
         private Mesh OutputMeshSurface(MeshOptions options)
         {
-            List<Vector3> verts = new();
-            List<Vector3> normals = new();
-            List<int> idxs = new();
+            List<Vector3> verts = [];
+            List<Vector3> normals = [];
+            List<int> idxs = [];
 
             foreach(var pair in Polys)
             {
