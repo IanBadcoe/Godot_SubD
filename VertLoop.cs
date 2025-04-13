@@ -1,6 +1,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.Linq;
 
 namespace SubD
@@ -15,14 +16,21 @@ namespace SubD
             private set;
         }
 
-        public VertLoop(IEnumerable<VIdx> v_idxs)
+        public BuildFromCylinders.Topology Topology
+        {
+            get;
+            private set;
+        }
+
+        public VertLoop(IEnumerable<VIdx> v_idxs, BuildFromCylinders.Topology topology)
         {
             VIdxs = [.. v_idxs];
+            Topology = topology;
         }
 
         internal VertLoop Reversed()
         {
-            return new VertLoop(VIdxs.Reverse());
+            return new VertLoop(VIdxs.Reverse(), Topology);
         }
     }
 }

@@ -1,5 +1,7 @@
-using System.IO;
 using Godot;
+
+using EdgeSharpFunc = System.Func<SubD.CylSection, int, SubD.BuildFromCylinders.Topology, SubD.BuildFromCylinders.EdgeType, bool>;
+using VertSharpFunc = System.Func<SubD.CylSection, int, SubD.BuildFromCylinders.Topology, bool>;
 
 namespace SubD
 {
@@ -50,12 +52,6 @@ namespace SubD
         // reach the end, or else hit a solid section.
         // Chained hollow sections use their thickness
 
-        public enum SectionSolidity
-        {
-            Hollow,
-            Solid
-        }
-
         public float Radius
         {
             get;
@@ -68,7 +64,7 @@ namespace SubD
             private set;
         }
 
-        public SectionSolidity Solidity
+        public BuildFromCylinders.SectionSolidity Solidity
         {
             get;
             private set;
@@ -86,33 +82,44 @@ namespace SubD
             private set;
         }
 
+        public EdgeSharpFunc EdgeSharpener
+        {
+            get;
+            private set;
+        }
+
+        public VertSharpFunc VertSharpener
+        {
+            get;
+            private set;
+        }
+
         public CylSection(
             float radius = 3,
             float length = 1,
             int sections = 6,
-            SectionSolidity solidity = SectionSolidity.Solid,
+            BuildFromCylinders.SectionSolidity solidity = BuildFromCylinders.SectionSolidity.Solid,
             float thickness = 1,
-            float offset_angle_degrees = 0)
-        {
-            Radius = radius;
-
-            Sections = sections;
-
-            Solidity = solidity;
-            Thickness = thickness;
-
-            Transform =
+            float offset_angle_degrees = 0,
+            EdgeSharpFunc edge_sharpener = null,
+            VertSharpFunc vert_sharpener = null)
+            : this(
+                radius, sections, solidity, thickness,
                 Transform3D.Identity
-                .RotatedLocal(new Vector3(0, 1, 0), offset_angle_degrees)
-                .Translated(new Vector3(0, length, 0));
+                    .RotatedLocal(new Vector3(0, 1, 0), offset_angle_degrees)
+                    .Translated(new Vector3(0, length, 0)),
+                edge_sharpener, vert_sharpener)
+        {
         }
 
         public CylSection(
             float radius = 3,
             int sections = 6,
-            SectionSolidity solidity = SectionSolidity.Solid,
+            BuildFromCylinders.SectionSolidity solidity = BuildFromCylinders.SectionSolidity.Solid,
             float thickness = 1,
-            Transform3D? transform = null)
+            Transform3D? transform = null,
+            EdgeSharpFunc edge_sharpener = null,
+            VertSharpFunc vert_sharpener = null)
         {
             Radius = radius;
 
@@ -122,6 +129,9 @@ namespace SubD
             Thickness = thickness;
 
             Transform = transform ?? Transform3D.Identity;
-        }
+
+            EdgeSharpener = edge_sharpener;
+            VertSharpener = vert_sharpener;
+       }
     }
 }
