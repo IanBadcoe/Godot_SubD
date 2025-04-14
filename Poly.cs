@@ -29,6 +29,12 @@ namespace SubD
             set;
         }
 
+        public string Tag
+        {
+            get;
+            set;
+        }
+
         static public IEnumerable<VIdx> StandardiseVIdxOrder(IEnumerable<VIdx> v_idxs)
         {
             int dummy;
@@ -61,6 +67,11 @@ namespace SubD
 
             // permute the edges the same, to preserve the relationship
             EIdxs =  [.. temp_es.Skip(where), .. temp_es.Take(where)];
+        }
+
+        public void SetMetadataFrom(Poly original_poly)
+        {
+            Tag = original_poly.Tag;
         }
 
         public static bool operator==(Poly lhs, Poly rhs)

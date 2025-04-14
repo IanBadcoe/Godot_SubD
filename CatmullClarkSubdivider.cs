@@ -165,7 +165,8 @@ namespace SubD
                             new AnnotatedVert(edge_centre_map[e_idx], null),
                             new AnnotatedVert(face_centre_map[p_pair.Key], null),
                             new AnnotatedVert(edge_centre_map[prev_e_idx], prev_edge)
-                        ]
+                        ],
+                        p_pair.Value
                     );
 
                     prev_e_idx = e_idx;
@@ -199,7 +200,7 @@ namespace SubD
             NewPolys = null;
         }
 
-        private void AddPoly(AnnotatedVert[] v_idxs)
+        private void AddPoly(AnnotatedVert[] v_idxs, Poly orig_poly)
         {
             List<EIdx> e_idxs = [];
             List<Edge> left_edges = [];
@@ -222,6 +223,7 @@ namespace SubD
             Poly poly = new(v_idxs.Select(x => x.VIdx), e_idxs);
             PIdx p_idx = new(NextPolyIdx++);
             NewPolys[p_idx] = poly;
+            poly.SetMetadataFrom(orig_poly);
 
             // it's a new poly, so let all the verts know
             foreach(Vert vert in poly.VIdxs.Select(x => NewVerts[x]))

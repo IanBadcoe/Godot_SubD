@@ -7,39 +7,17 @@ using VIdx = SubD.Idx<SubD.Vert>;
 using EIdx = SubD.Idx<SubD.Edge>;
 using PIdx = SubD.Idx<SubD.Poly>;
 
-using EdgeSharpFunc = System.Func<SubD.CylSection, int, SubD.BuildFromCylinders.Topology, SubD.BuildFromCylinders.EdgeType, bool>;
-using VertSharpFunc = System.Func<SubD.CylSection, int, SubD.BuildFromCylinders.Topology, bool>;
+using VertPropsFunc = System.Func<SubD.CylSection, int, SubD.CylTypes.Topology, SubD.CylTypes.VertProps>;
+using EdgePropsFunc = System.Func<SubD.CylSection, int, SubD.CylTypes.Topology, SubD.CylTypes.EdgeType, SubD.CylTypes.EdgeProps>;
+using PolyPropsFunc = System.Func<SubD.CylSection, int, SubD.CylTypes.Topology, SubD.CylTypes.PolyProps>;
+
 
 namespace SubD
 {
+    using CylTypes;
+
     public class BuildFromCylinders
     {
-        enum DiskFacing
-        {
-            Up,
-            Down,
-        }
-
-        // not a brilliant name, only used so far in the vert/edge callbacks, but could comwe up elsewhere
-        public enum Topology
-        {
-            Inside,
-            Outside,
-            Crossing
-        }
-
-        public enum SectionSolidity
-        {
-            Hollow,
-            Solid
-        }
-
-        public enum EdgeType
-        {
-            Circumferential,        //< running round the section
-            Coaxial                   //< running forwards/backwards between sections
-        }
-
         List<CylSection> Sections = [];
 
         // Surface building
@@ -59,13 +37,13 @@ namespace SubD
 
         public Surface ToSurface()
         {
-            int num_sections = Sections.Count;
+            int num_sectors = Sections.Count;
 
             // ***we cannot generate single section structures*** because they end up
             // with the inside->outside edges and the outside->inside edges being the same edges
             // and thus needing 2x Left and 2x Right polys, which we cannot store in the edge structure
             // (could be made to work with special casing, but who would want that anyway???)
-            if (num_sections < 2)
+            if (num_sectors < 2)
             {
                 return null;
             }
@@ -79,12 +57,12 @@ namespace SubD
 
             Transform3D transform = Transform3D.Identity;
 
-            for(int i = 0; i < num_sections; i++)
+            for(int i = 0; i < num_sectors; i++)
             {
                 CylSection sect = Sections[i];
 
                 bool is_first_section = i == 0;
-                bool is_last_section = i == num_sections - 1;
+                bool is_last_section = i == num_sectors - 1;
 
                 bool is_section_hollow = sect.Solidity == SectionSolidity.Hollow;
 
@@ -211,8 +189,11 @@ namespace SubD
         void JoinLoops(VertLoop first_loop, VertLoop second_loop,
             CylSection first_sect, CylSection second_sect)
         {
-            EdgeSharpFunc first_callback = first_sect.EdgeSharpener ?? new EdgeSharpFunc((s, i, t, et) => false);
-            EdgeSharpFunc second_callback = second_sect.EdgeSharpener ?? new EdgeSharpFunc((s, i, t, et) => false);
+            EdgePropsFunc first_e_callback = first_sect.EdgePropsCallback ?? new EdgePropsFunc((s, i, t, et) => new EdgeProps());
+            EdgePropsFunc second_e_callback = second_sect.EdgePropsCallback ?? new EdgePropsFunc((s, i, t, et) => new EdgeProps());
+
+            PolyPropsFunc first_p_callback = first_sect.PolyPropsCallback ?? new PolyPropsFunc((s, i, t) => new PolyProps());
+            PolyPropsFunc second_p_callback = second_sect.PolyPropsCallback ?? new PolyPropsFunc((s, i, t) => new PolyProps());
 
             // could maybe support different numbers here, but need to match them up based on
             // proximity and not written that yet, possibly overkill anyway
@@ -258,12 +239,14 @@ namespace SubD
 
                 Topology inter_loop_topology = first_loop.Topology == second_loop.Topology ? first_loop.Topology : Topology.Crossing;
 
-                poly.Add(new EdgeData(first_loop_v_idx, first_callback(first_sect, i, first_loop.Topology, EdgeType.Circumferential)));
-                poly.Add(new EdgeData(first_loop_next_v_idx, first_callback(first_sect, i_plus, inter_loop_topology, EdgeType.Coaxial)));
-                poly.Add(new EdgeData(second_loop_next_v_idx, second_callback(second_sect, i, second_loop.Topology, EdgeType.Circumferential)));
-                poly.Add(new EdgeData(second_loop_v_idx, first_callback(first_sect, i, inter_loop_topology, EdgeType.Coaxial)));
+                poly.Add(new EdgeData(first_loop_v_idx, first_e_callback(first_sect, i, first_loop.Topology, EdgeType.Circumferential)));
+                poly.Add(new EdgeData(first_loop_next_v_idx, first_e_callback(first_sect, i_plus, inter_loop_topology, EdgeType.Coaxial)));
+                poly.Add(new EdgeData(second_loop_next_v_idx, second_e_callback(second_sect, i, second_loop.Topology, EdgeType.Circumferential)));
+                poly.Add(new EdgeData(second_loop_v_idx, first_e_callback(first_sect, i, inter_loop_topology, EdgeType.Coaxial)));
 
-                AddPoly(poly);
+                PolyProps p_props = first_p_callback(first_sect, i, inter_loop_topology);
+
+                AddPoly(poly, p_props);
 
 //                AddPoly([prev_first_loop_v_idx, first_loop_vidx, second_loop_vidx, prev_second_loop_v_idx]);
             }
@@ -271,13 +254,14 @@ namespace SubD
 
         void FillLoop(VertLoop loop, CylSection sect, DiskFacing facing)
         {
-            EdgeSharpFunc callback = sect.EdgeSharpener ?? new EdgeSharpFunc((s, i, t, et) => false);
+            EdgePropsFunc e_callback = sect.EdgePropsCallback ?? new EdgePropsFunc((s, i, t, et) => new EdgeProps());
+            PolyPropsFunc p_callback = sect.PolyPropsCallback ?? new PolyPropsFunc((s, i, t) => new PolyProps());
 
-            List<bool> edge_sharpnesses = [];
+            List<EdgeProps> edge_sharpnesses = [];
 
             for(int i = 0; i < loop.VIdxs.Length; i++)
             {
-                edge_sharpnesses.Add(callback(sect, i, loop.Topology, EdgeType.Circumferential));
+                edge_sharpnesses.Add(e_callback(sect, i, loop.Topology, EdgeType.Circumferential));
             }
 
             IEnumerable<VIdx> v_idxs = loop.VIdxs;
@@ -293,22 +277,25 @@ namespace SubD
 
             IEnumerable<EdgeData> poly = v_idxs.Zip(edge_sharpnesses, (x, y) => new EdgeData(x, y));
 
-            AddPoly(poly.ToList());
+            // kinda hacky, but -1 means an end-cap
+            PolyProps p_props = p_callback(sect, -1, loop.Topology);
+
+            AddPoly(poly.ToList(), p_props);
         }
 
         struct EdgeData
         {
             public VIdx VIdx;
-            public bool IsSharp;
+            public EdgeProps Props;
 
-            public EdgeData(VIdx v_idx, bool is_sharp)
+            public EdgeData(VIdx v_idx, EdgeProps props)
             {
                 VIdx = v_idx;
-                IsSharp = is_sharp;
+                Props = props;
             }
         }
 
-        private void AddPoly(List<EdgeData> v_idxs)
+        private void AddPoly(List<EdgeData> v_idxs, PolyProps p_props)
         {
             List<EIdx> e_idxs = [];
             List<Edge> left_edges = [];
@@ -338,7 +325,8 @@ namespace SubD
                     EIdx e_idx = new(NextEIdx++);
 
                     NewEdges[e_idx] = edge;
-                    edge.IsSetSharp = v_idxs[i].IsSharp;
+                    edge.IsSetSharp = v_idxs[i].Props.IsSharp;
+                    edge.Tag = v_idxs[i].Props.Tag;
 
                     e_idxs.Add(e_idx);
                     // store the real dictionary member for setting its "Right" later
@@ -351,6 +339,7 @@ namespace SubD
             }
 
             Poly poly = new(v_idxs.Select(x => x.VIdx), e_idxs);
+            poly.Tag = p_props.Tag;
 
             PIdx p_idx = new(NextPIdx++);
             NewPolys[p_idx] = poly;
@@ -388,9 +377,9 @@ namespace SubD
 
         IEnumerable<VIdx> LoopVertGenerator(float radius, CylSection sect, Transform3D trans, Topology topology)
         {
-            for(int i = 0; i < sect.Sections; i++)
+            for(int i = 0; i < sect.Sectors; i++)
             {
-                float angle = i * Mathf.Pi * 2.0f / sect.Sections;
+                float angle = i * Mathf.Pi * 2.0f / sect.Sectors;
 
                 Vector3 pos = new(MathF.Cos(angle) * radius, 0, MathF.Sin(angle) * radius);
 
@@ -402,9 +391,11 @@ namespace SubD
 
                 NewVerts[v_idx] = vert;
 
-                if (sect.VertSharpener != null)
+                if (sect.VertPropsCallback != null)
                 {
-                    vert.IsSharp = sect.VertSharpener(sect, i, topology);
+                    VertProps props = sect.VertPropsCallback(sect, i, topology);
+                    vert.IsSharp = props.IsSharp;
+                    vert.Tag = props.Tag;
                 }
 
                 yield return v_idx;

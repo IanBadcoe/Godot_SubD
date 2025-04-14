@@ -7,6 +7,7 @@ using System.Linq;
 namespace SubD
 {
     using VIdx = Idx<Vert>;
+    using CylTypes;
 
     public class VertLoop
     {
@@ -16,13 +17,13 @@ namespace SubD
             private set;
         }
 
-        public BuildFromCylinders.Topology Topology
+        public Topology Topology
         {
             get;
             private set;
         }
 
-        public VertLoop(IEnumerable<VIdx> v_idxs, BuildFromCylinders.Topology topology)
+        public VertLoop(IEnumerable<VIdx> v_idxs, Topology topology)
         {
             VIdxs = [.. v_idxs];
             Topology = topology;

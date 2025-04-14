@@ -1,10 +1,12 @@
 using Godot;
 
-using EdgeSharpFunc = System.Func<SubD.CylSection, int, SubD.BuildFromCylinders.Topology, SubD.BuildFromCylinders.EdgeType, bool>;
-using VertSharpFunc = System.Func<SubD.CylSection, int, SubD.BuildFromCylinders.Topology, bool>;
+using VertPropsFunc = System.Func<SubD.CylSection, int, SubD.CylTypes.Topology, SubD.CylTypes.VertProps>;
+using EdgePropsFunc = System.Func<SubD.CylSection, int, SubD.CylTypes.Topology, SubD.CylTypes.EdgeType, SubD.CylTypes.EdgeProps>;
+using PolyPropsFunc = System.Func<SubD.CylSection, int, SubD.CylTypes.Topology, SubD.CylTypes.PolyProps>;
 
 namespace SubD
 {
+    using CylTypes;
     // one section will (theoretically) be a 2-sided disk (Solid).  Side view:
     //
     //           centre line
@@ -58,13 +60,13 @@ namespace SubD
             private set;
         }
 
-        public int Sections
+        public int Sectors
         {
             get;
             private set;
         }
 
-        public BuildFromCylinders.SectionSolidity Solidity
+        public CylTypes.SectionSolidity Solidity
         {
             get;
             private set;
@@ -82,13 +84,19 @@ namespace SubD
             private set;
         }
 
-        public EdgeSharpFunc EdgeSharpener
+        public EdgePropsFunc EdgePropsCallback
         {
             get;
             private set;
         }
 
-        public VertSharpFunc VertSharpener
+        public VertPropsFunc VertPropsCallback
+        {
+            get;
+            private set;
+        }
+
+        public PolyPropsFunc PolyPropsCallback
         {
             get;
             private set;
@@ -97,41 +105,44 @@ namespace SubD
         public CylSection(
             float radius = 3,
             float length = 1,
-            int sections = 6,
-            BuildFromCylinders.SectionSolidity solidity = BuildFromCylinders.SectionSolidity.Solid,
+            int sectors = 6,
+            SectionSolidity solidity = SectionSolidity.Solid,
             float thickness = 1,
             float offset_angle_degrees = 0,
-            EdgeSharpFunc edge_sharpener = null,
-            VertSharpFunc vert_sharpener = null)
+            EdgePropsFunc edge_callback = null,
+            VertPropsFunc vert_callback = null,
+            PolyPropsFunc poly_callback = null)
             : this(
-                radius, sections, solidity, thickness,
+                radius, sectors, solidity, thickness,
                 Transform3D.Identity
                     .RotatedLocal(new Vector3(0, 1, 0), offset_angle_degrees)
                     .Translated(new Vector3(0, length, 0)),
-                edge_sharpener, vert_sharpener)
+                edge_callback, vert_callback, poly_callback)
         {
         }
 
         public CylSection(
             float radius = 3,
-            int sections = 6,
-            BuildFromCylinders.SectionSolidity solidity = BuildFromCylinders.SectionSolidity.Solid,
+            int sectors = 6,
+            SectionSolidity solidity = SectionSolidity.Solid,
             float thickness = 1,
             Transform3D? transform = null,
-            EdgeSharpFunc edge_sharpener = null,
-            VertSharpFunc vert_sharpener = null)
+            EdgePropsFunc edge_callback = null,
+            VertPropsFunc vert_callback = null,
+            PolyPropsFunc poly_callback = null)
         {
             Radius = radius;
 
-            Sections = sections;
+            Sectors = sectors;
 
             Solidity = solidity;
             Thickness = thickness;
 
             Transform = transform ?? Transform3D.Identity;
 
-            EdgeSharpener = edge_sharpener;
-            VertSharpener = vert_sharpener;
+            EdgePropsCallback = edge_callback;
+            VertPropsCallback = vert_callback;
+            PolyPropsCallback = poly_callback;
        }
     }
 }

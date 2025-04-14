@@ -13,7 +13,7 @@ using System.Reflection.Metadata.Ecma335;
 namespace SubD
 {
     [DebuggerDisplay("Verts = Vert.Count, Edges = Edge.Count, Faces = Face.Count")]
-    public class Surface
+    public partial class Surface
     {
         public class OutVert
         {
@@ -318,32 +318,6 @@ namespace SubD
             Normals
         }
 
-        public struct MeshOptions
-        {
-            public bool Edges_IncludeSharp = true;
-            public bool Edges_IncludeSmooth = true;
-            public bool Edges_DetermineSmoothnessFromAngle = false; //< if set, call edges "sharp" or "smooth" based on their tagging
-                                                                    //< otherwise determine that based on the adjoining faces angle
-                                                                    //< and SplitangleDegrees
-
-            public Func<Edge, bool> Edges_Filter;                   //< if set, ignore above flags and include exactly the set of edges
-                                                                    //< for which this is true
-
-            public bool Normals_IncludeVert = false;
-            public bool Normals_IncludeSplitVert = false;
-            public bool Normals_IncludeEdge = false;               //< nothing uses these, but could be of interest
-            public bool Normals_IncludePoly = false;
-
-            public float? SplitAngleDegrees;                        //< if set, overrides splitting along edges tagged sharp
-                                                                    //< and instead splits along those with > this angle across them
-
-            public float DrawNormalsLength = 0.5f;                  //< reasonable if your input data is around unit sized
-
-            public MeshOptions()
-            {
-            }
-        }
-
         public Mesh ToMesh(MeshMode mesh_mode, MeshOptions? mesh_options = null)
         {
             MeshOptions options = mesh_options.HasValue ? mesh_options.Value : new MeshOptions();
@@ -641,11 +615,17 @@ namespace SubD
             List<Vector3> verts = [];
             List<Vector3> normals = [];
             List<int> idxs = [];
+            bool use_filter = options.Polys_filter != null;
 
             foreach(var pair in Polys)
             {
                 PIdx p_idx = pair.Key;
                 Poly poly = pair.Value;
+
+                if (use_filter && !options.Polys_filter(poly))
+                {
+                    continue;
+                }
 
                 foreach(VIdx v_idx in poly.VIdxs)
                 {
@@ -664,6 +644,11 @@ namespace SubD
             {
                 PIdx p_idx = pair.Key;
                 Poly poly = pair.Value;
+
+                if (use_filter && !options.Polys_filter(poly))
+                {
+                    continue;
+                }
 
                 int vert_0_idx = OutVerts[(p_idx, poly.VIdxs[0])].OutIdx;
 
