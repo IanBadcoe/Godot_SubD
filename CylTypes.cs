@@ -11,9 +11,9 @@ namespace SubD.CylTypes
     // not a brilliant name, only used so far in the vert/edge callbacks, but could comwe up elsewhere
     public enum Topology
     {
-        Inside,
-        Outside,
-        Crossing
+        Inside,         //< on the inside of the structure (if there are any "hollow" sections)
+        Outside,        //< on the outside of the structure
+        Crossing        //< crossing from the outside to the inside, end-caps, or the sides of holes...
     }
 
     public enum SectionSolidity
@@ -72,22 +72,62 @@ namespace SubD.CylTypes
         }
     }
 
-    // public struct SectorProperties
-    // {
-    //     public bool IsConnector;
-    //     public bool IsHole;
-    //     public HoleProperties? HoleProperties;
-    // }
+    public struct SectorProps
+    {
+        public HoleProps? HoleProps;
 
-    // public struct HoleProperties
-    // {
-    //     public float Radius;
-    //     public int Sectors;
-    // }
+        public SectorProps(HoleProps? hole_props)
+        {
+            HoleProps = hole_props;
+        }
+    }
+
+    public struct HoleProps
+    {
+        // X in this case is the direction around the cylinder
+        // Y is the direction along the cylinder
+        // (makes sense if the cylinder is upright)
+        public float Radius;        //< if Clearance not set, available space on the polygon targetted must be 5% larger than this
+        public float? Clearance;    //< if Clearance set, then hole size is calculated this much in from the existing poly corners
+
+        // if there is not room for any of the above cases, then the hole is skipped
+
+        public HoleProps(float radius = 0, float? clearance = null)
+        {
+            Radius = radius;
+            Clearance = clearance;
+        }
+    }
+
+    // picture worth 1000 words:
+    // prev        this              next
+    // section     section           section
+    //
+    //            |                 |
+    //            |                 |
+    //            |                 |
+    // -----------+-------(a)-------+--------------
+    //            |\__(hd)         /|
+    //            | \             / | a -> axial
+    //            |  +--(he)-----+  | c -> circumferential
+    //            |  |           |  | hd -> hole-diagonal
+    //           (c) |           |  | he -> hole-edge
+    //            | (he)         |  |
+    //            |  |           |  | h -> hole, not shown, as extend down beneath the inner 4 '+' marks
+    //            |  +-----------+  |
+    //            | /             \ |
+    //            |/               \|
+    // -----------+-----------------+--------------
+    //            |                 |
+    //            |                 |
+    //            |                 |
 
     public enum EdgeType
     {
-        Circumferential,        //< running round the section
-        Coaxial                   //< running forwards/backwards between sections
+        Circumferential,            //< running round the section
+        Axial,                      //< running forwards<->>backwards between sections
+        HoleEdge,                   //< running around the edge of a hole
+        HoleDiagonal,               //< from the corners of the polygon the hole is in, to the corners of the hole
+        Hole                        //< running from the outside to the inside, along the length of the hole
     }
 }

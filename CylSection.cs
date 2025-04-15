@@ -1,12 +1,16 @@
 using Godot;
 
-using VertPropsFunc = System.Func<SubD.CylSection, int, SubD.CylTypes.Topology, SubD.CylTypes.VertProps>;
-using EdgePropsFunc = System.Func<SubD.CylSection, int, SubD.CylTypes.Topology, SubD.CylTypes.EdgeType, SubD.CylTypes.EdgeProps>;
-using PolyPropsFunc = System.Func<SubD.CylSection, int, SubD.CylTypes.Topology, SubD.CylTypes.PolyProps>;
-
 namespace SubD
 {
     using CylTypes;
+
+    using SectionIdx = Idx<CylSection>;
+
+    using VertPropsFunc = System.Func<CylSection, int, CylTypes.Topology, CylTypes.VertProps>;
+    using EdgePropsFunc = System.Func<CylSection, int, CylTypes.Topology, CylTypes.EdgeType, CylTypes.EdgeProps>;
+    using PolyPropsFunc = System.Func<CylSection, int, CylTypes.Topology, CylTypes.PolyProps>;
+    using SectorPropsFunc = System.Func<CylSection, int, CylTypes.SectorProps>;
+
     // one section will (theoretically) be a 2-sided disk (Solid).  Side view:
     //
     //           centre line
@@ -66,7 +70,7 @@ namespace SubD
             private set;
         }
 
-        public CylTypes.SectionSolidity Solidity
+        public SectionSolidity Solidity
         {
             get;
             private set;
@@ -84,23 +88,35 @@ namespace SubD
             private set;
         }
 
-        public EdgePropsFunc EdgePropsCallback
+        public EdgePropsFunc EdgeCallback
         {
             get;
             private set;
         }
 
-        public VertPropsFunc VertPropsCallback
+        public VertPropsFunc VertCallback
         {
             get;
             private set;
         }
 
-        public PolyPropsFunc PolyPropsCallback
+        public PolyPropsFunc PolyCallback
         {
             get;
             private set;
         }
+
+        public SectorPropsFunc SectorCallback
+        {
+            get;
+            private set;
+        }
+
+        public SectionIdx SectionIdx
+        {
+            get;
+            set;
+        } = SectionIdx.Empty;
 
         public CylSection(
             float radius = 3,
@@ -108,16 +124,19 @@ namespace SubD
             int sectors = 6,
             SectionSolidity solidity = SectionSolidity.Solid,
             float thickness = 1,
-            float offset_angle_degrees = 0,
+            float rot_x_degrees = 0, float rot_y_degrees = 0, float rot_z_degrees = 0,
             EdgePropsFunc edge_callback = null,
             VertPropsFunc vert_callback = null,
-            PolyPropsFunc poly_callback = null)
+            PolyPropsFunc poly_callback = null,
+            SectorPropsFunc sector_callback = null)
             : this(
                 radius, sectors, solidity, thickness,
                 Transform3D.Identity
-                    .RotatedLocal(new Vector3(0, 1, 0), offset_angle_degrees)
+                    .RotatedLocal(new Vector3(0, 1, 0), rot_y_degrees * Mathf.Pi / 180)         //<
+                    .RotatedLocal(new Vector3(1, 0, 0), rot_x_degrees * Mathf.Pi / 180)         //< just a guess for the best order to apply these in
+                    .RotatedLocal(new Vector3(0, 0, 1), rot_z_degrees * Mathf.Pi / 180)         //< (could offer some clever quat thing as well)
                     .Translated(new Vector3(0, length, 0)),
-                edge_callback, vert_callback, poly_callback)
+                edge_callback, vert_callback, poly_callback, sector_callback)
         {
         }
 
@@ -129,7 +148,8 @@ namespace SubD
             Transform3D? transform = null,
             EdgePropsFunc edge_callback = null,
             VertPropsFunc vert_callback = null,
-            PolyPropsFunc poly_callback = null)
+            PolyPropsFunc poly_callback = null,
+            SectorPropsFunc sector_callback = null)
         {
             Radius = radius;
 
@@ -140,9 +160,10 @@ namespace SubD
 
             Transform = transform ?? Transform3D.Identity;
 
-            EdgePropsCallback = edge_callback;
-            VertPropsCallback = vert_callback;
-            PolyPropsCallback = poly_callback;
+            EdgeCallback = edge_callback;
+            VertCallback = vert_callback;
+            PolyCallback = poly_callback;
+            SectorCallback = sector_callback;
        }
     }
 }

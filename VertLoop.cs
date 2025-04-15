@@ -29,9 +29,15 @@ namespace SubD
             Topology = topology;
         }
 
-        internal VertLoop Reversed()
+        public VertLoop Reversed()
         {
             return new VertLoop(VIdxs.Reverse(), Topology);
+        }
+
+        public VertLoop Shift(int step)
+        {
+            step = (step + VIdxs.Length) % VIdxs.Length;
+            return new VertLoop(VIdxs.Skip(step).Concat(VIdxs.Take(step)), Topology);
         }
     }
 }

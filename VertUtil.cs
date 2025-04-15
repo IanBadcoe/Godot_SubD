@@ -22,6 +22,11 @@ namespace SubD
             // number of polys is the same
             int num_edges = vert.EIdxs.Length;
 
+            if (num_edges == 0)
+            {
+                return vert;
+            }
+
             EIdx e_idx = vert.EIdxs.First();
 
             do {

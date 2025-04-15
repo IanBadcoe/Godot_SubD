@@ -144,22 +144,7 @@ namespace SubD
             {
                 Vector3[] verts = [.. PolyVerts(p_idx).Select(x => x.Position)];
 
-                Vector3 last_delta = verts[1] - verts[0];
-
-                Vector3 accum = Vector3.Zero;
-
-                for(int i = 2; i < verts.Length; i++)
-                {
-                    Vector3 delta = verts[i] - verts[0];
-
-                    Vector3 cross = delta.Cross(last_delta);
-
-                    accum += cross;
-
-                    last_delta = delta;
-                }
-
-                poly.Normal = accum.Normalized();
+                poly.Normal = PolyUtil.PolyNormal(verts);
             }
 
             return poly.Normal.Value;
@@ -341,7 +326,7 @@ namespace SubD
                 }
             }
 
-            foreach(var v_pair in Verts)
+            foreach(var v_pair in Verts.Where(x => x.Value.EIdxs.Any()))
             {
                 VIdx v_idx = v_pair.Key;
                 Vert vert = v_pair.Value;

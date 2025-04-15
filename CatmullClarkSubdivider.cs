@@ -108,7 +108,7 @@ namespace SubD
                     // smooth rule
 
                     // num EIdxs == num PIdxs...
-                    int n = input_vert.EIdxs.Count();
+                    int n = input_vert.EIdxs.Length;
 
                     Vector3 face_points_avg
                         = input_vert.PIdxs
