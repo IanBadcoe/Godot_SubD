@@ -118,6 +118,12 @@ namespace SubD
             set;
         } = SectionIdx.Empty;
 
+        public string Tag
+        {
+            get;
+            private set;
+        }
+
         public CylSection(
             float radius = 3,
             float length = 1,
@@ -128,7 +134,8 @@ namespace SubD
             EdgePropsFunc edge_callback = null,
             VertPropsFunc vert_callback = null,
             PolyPropsFunc poly_callback = null,
-            SectorPropsFunc sector_callback = null)
+            SectorPropsFunc sector_callback = null,
+            string tag = null)
             : this(
                 radius, sectors, solidity, thickness,
                 Transform3D.Identity
@@ -136,7 +143,8 @@ namespace SubD
                     .RotatedLocal(new Vector3(1, 0, 0), rot_x_degrees * Mathf.Pi / 180)         //< just a guess for the best order to apply these in
                     .RotatedLocal(new Vector3(0, 0, 1), rot_z_degrees * Mathf.Pi / 180)         //< (could offer some clever quat thing as well)
                     .Translated(new Vector3(0, length, 0)),
-                edge_callback, vert_callback, poly_callback, sector_callback)
+                edge_callback, vert_callback, poly_callback, sector_callback,
+                tag)
         {
         }
 
@@ -149,7 +157,8 @@ namespace SubD
             EdgePropsFunc edge_callback = null,
             VertPropsFunc vert_callback = null,
             PolyPropsFunc poly_callback = null,
-            SectorPropsFunc sector_callback = null)
+            SectorPropsFunc sector_callback = null,
+            string tag = null)
         {
             Radius = radius;
 
@@ -164,6 +173,8 @@ namespace SubD
             VertCallback = vert_callback;
             PolyCallback = poly_callback;
             SectorCallback = sector_callback;
+
+            Tag = tag;
        }
     }
 }
