@@ -2,18 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using SubD;
 
-using VIdx = SubD.Idx<SubD.Vert>;
-using EIdx = SubD.Idx<SubD.Edge>;
-using PIdx = SubD.Idx<SubD.Poly>;
 using System.Diagnostics;
-using System.Dynamic;
-using System.Runtime.CompilerServices;
-using System.Threading;
 
 namespace SubD
 {
+    using VIdx = Idx<Vert>;
+    using EIdx = Idx<Edge>;
+    using PIdx = Idx<Poly>;
+
     public class Cube
     {
         // Top/Bottom = Y

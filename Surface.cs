@@ -1,17 +1,18 @@
 using System.Collections.Generic;
 using System.Linq;
 
-using EIdx = SubD.Idx<SubD.Edge>;
-using VIdx = SubD.Idx<SubD.Vert>;
-using PIdx = SubD.Idx<SubD.Poly>;
-
 using Godot;
 using System.Diagnostics;
 using System;
-using System.Reflection.Metadata.Ecma335;
 
 namespace SubD
 {
+    using EIdx = Idx<Edge>;
+    using VIdx = Idx<Vert>;
+    using PIdx = Idx<Poly>;
+
+    using DistortFunc = Func<Vector3, Vector3>;
+
     [DebuggerDisplay("Verts = Vert.Count, Edges = Edge.Count, Faces = Face.Count")]
     public partial class Surface
     {
@@ -513,6 +514,7 @@ namespace SubD
             bool include_smooth = options.Edges_IncludeSmooth;
             bool use_angle = options.Edges_DetermineSmoothnessFromAngle;
             bool use_filter = options.Edges_Filter != null;
+            float vert_offset = options.Edges_Offset;
 
             foreach(var pair in Polys)
             {
@@ -525,7 +527,13 @@ namespace SubD
                     if (out_vert.OutIdx == -1)
                     {
                         out_vert.OutIdx = verts.Count;
-                        verts.Add(out_vert.Vert.Position);
+                        Vector3 position = out_vert.Vert.Position;
+
+                        if (vert_offset != 0)
+                        {
+                            position += VertNormal(v_idx) * vert_offset;
+                        }
+                        verts.Add(position);
                         normals.Add(out_vert.Normal);
                     }
                 }
@@ -658,6 +666,43 @@ namespace SubD
             mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
 
             return mesh;
+        }
+
+        public Surface Distort(DistortFunc distortion)
+        {
+            BidirectionalDictionary<VIdx, Vert> NewVerts = [];
+
+            foreach(VIdx v_idx in Verts.Keys)
+            {
+                Vert vert = Verts[v_idx];
+
+                Vert new_vert = new Vert(distortion(vert.Position), vert.EIdxs, vert.PIdxs);
+                new_vert.SetMetadataFrom(vert);
+
+                NewVerts[v_idx] = new_vert;
+            }
+
+            BidirectionalDictionary<EIdx, Edge> NewEdges = [];
+
+            foreach(var pair in Edges)
+            {
+                Edge edge = pair.Value;
+                Edge new_edge = new Edge(edge.Start, edge.End, edge.Left, edge.Right);
+                new_edge.SetMetaDataFrom(edge);
+                NewEdges[pair.Key] = new_edge;
+            }
+
+            Dictionary<PIdx, Poly> NewPolys = [];
+
+            foreach(var pair in Polys)
+            {
+                Poly poly = pair.Value;
+                Poly new_poly = new Poly(poly.VIdxs, poly.EIdxs);
+                new_poly.SetMetadataFrom(poly);
+                NewPolys[pair.Key] = new_poly;
+            }
+
+            return new Surface(NewVerts, NewEdges, NewPolys);
         }
     }
 }
