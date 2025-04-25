@@ -311,7 +311,7 @@ namespace SubD
             if (use_angle)
             {
                 float angle = options.SplitAngleDegrees.Value;
-                float cos_angle = MathF.Cos(angle * MathF.PI / 180);
+                float cos_angle = Mathf.Cos(angle * Mathf.Pi / 180);
 
                 foreach(var pair in Edges)
                 {

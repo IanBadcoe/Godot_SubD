@@ -753,7 +753,7 @@ namespace SubD
             extra_trans.Origin = centre;// - trans.Origin;     //< the transform, and the centre, both contain the overall offset of this section
 
             // holes are always quads, because they are punched in quad faces
-            return LoopVertGenerator(radius, 4, sect, extra_trans, topology, MathF.PI / 4).Reverse();
+            return LoopVertGenerator(radius, 4, sect, extra_trans, topology, Mathf.Pi / 4).Reverse();
         }
 
         IEnumerable<VIdx> LoopVertGenerator(float radius, int sectors, CylSection sect, Transform3D trans, Topology topology, float start_angle_radians = 0)
@@ -762,7 +762,7 @@ namespace SubD
             {
                 float angle = start_angle_radians + i * Mathf.Pi * 2.0f / sectors;
 
-                Vector3 pos = new(MathF.Cos(angle) * radius, 0, MathF.Sin(angle) * radius);
+                Vector3 pos = new(Mathf.Cos(angle) * radius, 0, Mathf.Sin(angle) * radius);
 
                 pos = trans * pos;
 
