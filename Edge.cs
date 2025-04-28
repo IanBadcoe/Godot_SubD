@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+
 using Godot;
-using PIdx = SubD.Idx<SubD.Poly>;
-using VIdx = SubD.Idx<SubD.Vert>;
+
+using Godot_Util;
 
 namespace SubD
 {
+    using PIdx = Idx<Poly>;
+    using VIdx = Idx<Vert>;
+
     [DebuggerDisplay("{Start}->{End} Left: {SubD.Idx<SubD.Poly>.Idx2String(Left)} Right: {SubD.Idx<SubD.Poly>.Idx2String(Right)} Sharp: {IsSharp}")]
     public class Edge
     {

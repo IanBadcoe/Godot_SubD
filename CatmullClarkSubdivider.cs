@@ -1,13 +1,17 @@
-using VIdx = SubD.Idx<SubD.Vert>;
-using EIdx = SubD.Idx<SubD.Edge>;
-using PIdx = SubD.Idx<SubD.Poly>;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+
 using Godot;
+
+using Godot_Util;
 
 namespace SubD
 {
+    using VIdx = Idx<Vert>;
+    using EIdx = Idx<Edge>;
+    using PIdx = Idx<Poly>;
+
     struct AnnotatedVert
     {
         public VIdx VIdx;

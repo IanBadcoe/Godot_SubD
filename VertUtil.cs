@@ -1,14 +1,15 @@
-using SubD;
 using System.Collections.Generic;
 using System.Linq;
 using System;
 
-using VIdx = SubD.Idx<SubD.Vert>;
-using EIdx = SubD.Idx<SubD.Edge>;
-using PIdx = SubD.Idx<SubD.Poly>;
+using Godot_Util;
 
 namespace SubD
 {
+    using VIdx = Idx<Vert>;
+    using EIdx = Idx<Edge>;
+    using PIdx = Idx<Poly>;
+
     public static class VertUtil
     {
         public static Vert ToVertWithSortedEdgesAndPolys(

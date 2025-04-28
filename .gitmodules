@@ -1,0 +1,3 @@
+[submodule "Godot_Util"]
+	path = Godot_Util
+	url = https://github.com/IanBadcoe/Godot_Util.git

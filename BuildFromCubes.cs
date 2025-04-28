@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Diagnostics;
+
 using Godot;
 
-using System.Diagnostics;
+using Godot_Util;
 
 namespace SubD
 {
