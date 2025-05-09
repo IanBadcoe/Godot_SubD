@@ -1,9 +1,5 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 
 namespace SubD
 {
@@ -60,6 +56,9 @@ namespace SubD
             // :-D
             return idx.Value.Value.ToString();
         }
+
+        public readonly bool HasValue => Value != -1;
+
         public readonly static Idx<IdxType> Empty = new(-1);
     }
 }

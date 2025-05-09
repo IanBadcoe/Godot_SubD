@@ -6,24 +6,29 @@ using Godot;
 
 using Godot_Util;
 
+using Geom_Util;
+using Geom_Util.Interfaces;
+using Godot_Util.CSharp_Util;
+
 namespace SubD
 {
     using PIdx = Idx<Poly>;
     using VIdx = Idx<Vert>;
+    using EIdx = Idx<Edge>;
 
     [DebuggerDisplay("{Start}->{End} Left: {SubD.Idx<SubD.Poly>.Idx2String(Left)} Right: {SubD.Idx<SubD.Poly>.Idx2String(Right)} Sharp: {IsSharp}")]
-    public class Edge
+    public class Edge : ISpatialValue<EIdx>
     {
-        public VIdx Start
+        public Vert Start
         {
             get;
-            private set;
+            set;
         }
 
-        public VIdx End
+        public Vert End
         {
             get;
-            private set;
+            set;
         }
 
 #region cached_data
@@ -57,20 +62,11 @@ namespace SubD
         }
 #endregion
 
-        // ideally we would be a const object, but construction is quite spread out in time and having a separate "builder" version of this
-        // (and vert, and maybe poly) would be a pain, so let's instead have a "Freeze" operation at the end of construction
-        bool Frozen = false;
-
-        public void Freeze()
-        {
-            Frozen = true;
-        }
-
         // left and right adjoining polys, if there are any, in the Start->End direction viewed from "outside"
         // (this means that the "right" poly uses this edge in the "forwards" direction)
 
-        PIdx? LeftInner;
-        public PIdx? Left
+        Poly LeftInner;
+        public Poly Left
         {
             get
             {
@@ -78,21 +74,12 @@ namespace SubD
             }
             set
             {
-                if (Frozen)
-                {
-                    throw new InvalidOperationException();
-                }
-
-                // we do not expect to always have this, but if we do, we expect to set it once and not change it
-                // (could add ability to null it here, if that becomes an issue)
-                Util.Assert(LeftInner == null);
-
                 LeftInner = value;
             }
         }
 
-        PIdx? RightInner;
-        public PIdx? Right
+        Poly RightInner;
+        public Poly Right
         {
             get
             {
@@ -100,20 +87,11 @@ namespace SubD
             }
             set
             {
-                if (Frozen)
-                {
-                    throw new InvalidOperationException();
-                }
-
-                // we do not expect to always have this, but if we do, we expect to set it once and not change it
-                // (could add ability to null it here, if that becomes an issue)
-                Util.Assert(RightInner == null);
-
                 RightInner = value;
             }
         }
 
-        public IEnumerable<VIdx> VIdxs
+        public IEnumerable<Vert> Verts
         {
             get
             {
@@ -122,23 +100,28 @@ namespace SubD
             }
         }
 
-        public IEnumerable<PIdx> PIdxs
+        public IEnumerable<Poly> Polys
         {
             get
             {
-                if (Left.HasValue)
+                if (Left != null)
                 {
-                    yield return Left.Value;
+                    yield return Left;
                 }
 
-                if (Right.HasValue)
+                if (Right != null)
                 {
-                    yield return Right.Value;
+                    yield return Right;
                 }
             }
         }
 
-        public Edge(VIdx start, VIdx end, PIdx? left = null, PIdx? right = null)
+        public EIdx Key { get; set; }
+
+        public Vector3 MidPoint => (Start.Position + End.Position) / 2;
+
+        // potentially dangerous as *shallow* copy
+        public Edge(Vert start, Vert end, Poly left = null, Poly right = null)
         {
             Start = start;
             End = end;
@@ -147,19 +130,27 @@ namespace SubD
             Right = right;
         }
 
-        public VIdx? OtherVert(VIdx vert)
+        // potentially dangerous as *shallow* copy
+        public Edge(Edge old_edge) : this(old_edge.Start, old_edge.End, old_edge.Left, old_edge.Right)
+        {
+            SetMetaDataFrom(old_edge);
+        }
+
+        public Vert OtherVert(Vert vert)
         {
             if (vert == Start)
             {
                 return End;
             }
+            else if (vert == End)
+            {
+                return Start;
+            }
 
-            Util.Assert(vert == End);
-
-            return Start;
+            return null;
         }
 
-        public PIdx? OtherPoly(PIdx poly)
+        public Poly OtherPoly(Poly poly)
         {
             if (poly == Left)
             {
@@ -171,18 +162,13 @@ namespace SubD
             return Left;
         }
 
-        public void RemovePoly(PIdx p_idx)
+        public void RemovePoly(Poly poly)
         {
-            if (Frozen)
-            {
-                throw new InvalidOperationException();
-            }
-
-            if (p_idx == Left)
+            if (poly == Left)
             {
                 LeftInner = null;
             }
-            else if (p_idx == Right)
+            else if (poly == Right)
             {
                 RightInner = null;
             }
@@ -197,42 +183,15 @@ namespace SubD
             return new Edge(End, Start, Right, Left);
         }
 
-        public static bool operator==(Edge lhs, Edge rhs)
-        {
-            if (ReferenceEquals(lhs, rhs))
-            {
-                return true;
-            }
-
-            if (ReferenceEquals(lhs, null) || ReferenceEquals(rhs, null))
-            {
-                return false;
-            }
-
-            return lhs.Start == rhs.Start && lhs.End == rhs.End;
-        }
-
-        public static bool operator!=(Edge lhs, Edge rhs)
-        {
-            return !(lhs == rhs);
-        }
-
-        public override bool Equals(object obj)
-        {
-            var edge = obj as Edge;
-
-            return this == edge;
-        }
-
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(Start.GetHashCode(), End.GetHashCode());
-        }
-
         public void SetMetaDataFrom(Edge original_edge)
         {
             IsSetSharp = original_edge.IsSetSharp;
             Tag = original_edge.Tag;
+        }
+
+        public ImBounds GetBounds()
+        {
+            return Start.GetBounds().UnionedWith(End.GetBounds());
         }
     }
 }
