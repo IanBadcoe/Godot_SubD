@@ -1,3 +1,5 @@
+#define PROFILE_ON
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,6 +8,7 @@ using Godot;
 
 using Godot_Util;
 using System.Data;
+using Geom_Util;
 
 namespace SubD.Builders
 {
@@ -115,7 +118,9 @@ namespace SubD.Builders
         {
             if (Dirty)
             {
+                PoorMansProfiler.Start("PopulateMergeStock");
                 PopulateMergeStock();
+                PoorMansProfiler.End("PopulateMergeStock");
             }
             if (MergeStock.Count == 0)
             {
@@ -126,6 +131,7 @@ namespace SubD.Builders
 
             foreach(int merge_group in MergeStock.Select(x => x.MergeGroup).Distinct())
             {
+                PoorMansProfiler.Start("DumbConcat");
                 // first we dumbly concat all the parts of the merge-group, this means they all
                 // come into the same surface but nothing is yet merged, everything is separate with
                 // duplicate faces/edges/verts on any points of contact
@@ -140,6 +146,7 @@ namespace SubD.Builders
                         intermediate_merges[merge_group].DumbConcat(to_merge.Polyhedron);
                     }
                 }
+                PoorMansProfiler.End("DumbConcat");
 
                 Surface surf = intermediate_merges[merge_group];
 
@@ -155,7 +162,9 @@ namespace SubD.Builders
                     MergeVerts(surf);
                 }
 
+                PoorMansProfiler.Start("Debug");
                 surf.DebugValidate();
+                PoorMansProfiler.End("Debug");
             }
 
             return intermediate_merges;
@@ -163,13 +172,16 @@ namespace SubD.Builders
 
         public Surface ToSurface(bool merge = true)
         {
+            PoorMansProfiler.Start("ToSurfaces");
             IDictionary<int, Surface> intermediate_merges = ToSurfaces(merge);
+            PoorMansProfiler.End("ToSurfaces");
 
             if (intermediate_merges == null)
             {
                 return null;
             }
 
+            PoorMansProfiler.Start("Concat");
             Surface ret = null;
 
             foreach(Surface surf in intermediate_merges.Values)
@@ -183,40 +195,43 @@ namespace SubD.Builders
                     ret.DumbConcat(surf);
                 }
             }
+            PoorMansProfiler.End("Concat");
 
             return ret;
         }
 
         void MergeVerts(Surface surf)
         {
-            List<Vert> verts = surf.Verts.Values.ToList();
+            // not sure if I need this
+            // if I do, redo via RTree search in inner loop
+            // List<Vert> verts = surf.Verts.Values.ToList();
 
-            for(int i = 0; i < verts.Count - 1; i++)
-            {
-                Vert vert1 = verts[i];
+            // for(int i = 0; i < verts.Count - 1; i++)
+            // {
+            //     Vert vert1 = verts[i];
 
-                if (!surf.Verts.Contains(vert1))
-                {
-                    // gone in an earier merge
-                    continue;
-                }
+            //     if (!surf.Verts.Contains(vert1))
+            //     {
+            //         // gone in an earier merge
+            //         continue;
+            //     }
 
-                for(int j = i + 1; j < verts.Count; j++)
-                {
-                    Vert vert2 = verts[j];
+            //     for(int j = i + 1; j < verts.Count; j++)
+            //     {
+            //         Vert vert2 = verts[j];
 
-                    if (!surf.Verts.Contains(vert2))
-                    {
-                        // gone in an earier merge
-                        continue;
-                    }
+            //         if (!surf.Verts.Contains(vert2))
+            //         {
+            //             // gone in an earier merge
+            //             continue;
+            //         }
 
-                    if (AreVertMergeTargets(surf, vert1, vert2))
-                    {
-                        MergeVertPair(surf, vert1, vert2);
-                    }
-                }
-            }
+            //         if (AreVertMergeTargets(surf, vert1, vert2))
+            //         {
+            //             MergeVertPair(surf, vert1, vert2);
+            //         }
+            //     }
+            // }
         }
 
         private void MergeVertPair(Surface surf, Vert vert1, Vert vert2)
@@ -231,34 +246,36 @@ namespace SubD.Builders
 
         void MergeEdges(Surface surf)
         {
-            List<Edge> edges = surf.Edges.Values.ToList();
+            // not sure if I need this
+            // if I do, redo via RTree search in inner loop
+            // List<Edge> edges = surf.Edges.Values.ToList();
 
-            for(int i = 0; i < edges.Count - 1; i++)
-            {
-                Edge edge1 = edges[i];
+            // for(int i = 0; i < edges.Count - 1; i++)
+            // {
+            //     Edge edge1 = edges[i];
 
-                if (!surf.Edges.Contains(edge1))
-                {
-                    // gone in an earier merge
-                    continue;
-                }
+            //     if (!surf.Edges.Contains(edge1))
+            //     {
+            //         // gone in an earier merge
+            //         continue;
+            //     }
 
-                for(int j = i + 1; j < edges.Count; j++)
-                {
-                    Edge edge2 = edges[j];
+            //     for(int j = i + 1; j < edges.Count; j++)
+            //     {
+            //         Edge edge2 = edges[j];
 
-                    if (!surf.Edges.Contains(edge2))
-                    {
-                        // gone in an earier merge
-                        continue;
-                    }
+            //         if (!surf.Edges.Contains(edge2))
+            //         {
+            //             // gone in an earier merge
+            //             continue;
+            //         }
 
-                    if (AreEdgeMergeTargets(surf, edge1, edge2))
-                    {
-                        MergeEdgePair(surf, edge1, edge2);
-                    }
-                }
-            }
+            //         if (AreEdgeMergeTargets(surf, edge1, edge2))
+            //         {
+            //             MergeEdgePair(surf, edge1, edge2);
+            //         }
+            //     }
+            // }
         }
 
         private void MergeEdgePair(Surface surf, Edge edge1, Edge edge2)
@@ -273,16 +290,22 @@ namespace SubD.Builders
 
         void MergeFaces(Surface surf)
         {
+            PoorMansProfiler.Start("MergeFaces");
             // the Faces collection on surf is going to lose some members during this process
             // so the easiest way that does not involve restarting loops is
             // to build a list now, let it go out of date, and
-            List<Face> faces = surf.Faces.Values.ToList();
+            List<Face> faces = [.. surf.Faces.Values];
 
             for(int i = 0; i < faces.Count - 1; i++)
             {
                 Face face1 = faces[i];
 
-                for(int j = i + 1; j < faces.Count; j++)
+                ImBounds bounds = face1.GetBounds();
+
+                List<Face> matching_faces = [.. surf.Faces.FindValues(bounds, IReadOnlyRTree.SearchMode.ExactMatch)
+                    .Where(x => x != face1)];
+
+                foreach(Face face2 in matching_faces)
                 {
                     if (!surf.Faces.Contains(face1))
                     {
@@ -291,20 +314,23 @@ namespace SubD.Builders
                         break;
                     }
 
-                    Face face2 = faces[j];
-
                     if (!surf.Faces.Contains(face2))
                     {
                         // gone in an earier merge
                         continue;
                     }
 
+                    PoorMansProfiler.Start("TargetCheck");
                     if (AreFaceMergeTargets(surf, face1, face2))
                     {
+                        PoorMansProfiler.Start("MergeFacePair");
                         MergeFacePair(surf, face1, face2);
+                        PoorMansProfiler.End("MergeFacePair");
                     }
+                    PoorMansProfiler.End("TargetCheck");
                 }
             }
+            PoorMansProfiler.End("MergeFaces");
         }
 
         void MergeFacePair(Surface surf, Face face1, Face face2)
