@@ -7,14 +7,17 @@ using Godot;
 using Godot_Util.CSharp_Util;
 
 using Godot_Util;
+using SubD.Builders;
+using System.Diagnostics;
 
 namespace SubD
 {
     using VIdx = Idx<Vert>;
     using EIdx = Idx<Edge>;
-    using PIdx = Idx<Poly>;
+    using FIdx = Idx<Face>;
 
-    public class Poly : ISpatialValue<PIdx>
+    [DebuggerDisplay("{Key} Edges:{Edges.Length} Verts:{Verts.Length}")]
+    public class Face : ISpatialValue<FIdx>, IHasGeneratiorIdentities
     {
         public Vert[] Verts
         {
@@ -41,7 +44,9 @@ namespace SubD
             set;
         }
 
-        public PIdx Key { get; set; }
+        public FIdx Key { get; set; }
+
+        public HashSet<IGeneratorIdentity> GIs { get; } = [];
 
         public Vector3 Centre => Verts.Select(x => x.Position).Sum() / Verts.Length;
 
@@ -55,7 +60,7 @@ namespace SubD
         static public IEnumerable<Vert> StandardiseVIdxOrder(IEnumerable<Vert> verts, out int where)
         {
             // rotete-permute verts and edges into a standard order so we can compare
-            // polys from different sources
+            // faces from different sources
 
             var temp_vs = verts.ToArray();
 
@@ -66,10 +71,15 @@ namespace SubD
             return verts.Skip(where).Concat(verts.Take(where));
         }
 
-        public Poly(IEnumerable<Vert> verts, IEnumerable<Edge> edges)
+        public Face(IEnumerable<Vert> verts, IEnumerable<Edge> edges, IGeneratorIdentity gi = null)
+            : this(verts, edges, new HashSet<IGeneratorIdentity>{ gi })
+        {
+        }
+
+        public Face(IEnumerable<Vert> verts, IEnumerable<Edge> edges, HashSet<IGeneratorIdentity> gis)
         {
             // rotate-permute verts and edges into a standard order so we can compare
-            // polys from different sources
+            // faces from different sources
             int where;
             Verts = [.. StandardiseVIdxOrder(verts, out where)];
 
@@ -77,20 +87,26 @@ namespace SubD
 
             // permute the edges the same, to preserve the relationship
             Edges =  [.. temp_es.Skip(where), .. temp_es.Take(where)];
+
+            // not sure whether to call "GI" metadata or not...
+            GIs = gis;
         }
 
         // potentially dangerous as *shallow* copy
-        public Poly(Poly old_poly)
+        public Face(Face old_face)
         {
-            Verts = [.. old_poly.Verts];
-            Edges = [.. old_poly.Edges];
+            Verts = [.. old_face.Verts];
+            Edges = [.. old_face.Edges];
 
-            SetMetadataFrom(old_poly);
+             // not sure whether to call "GI" metadata or not...
+            GIs = old_face.GIs;
+
+            SetMetadataFrom(old_face);
         }
 
-        public void SetMetadataFrom(Poly original_poly)
+        public void SetMetadataFrom(Face original_face)
         {
-            Tag = original_poly.Tag;
+            Tag = original_face.Tag;
         }
 
         public ImBounds GetBounds()

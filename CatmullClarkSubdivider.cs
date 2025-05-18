@@ -13,12 +13,12 @@ namespace SubD
 {
     using VIdx = Idx<Vert>;
     using EIdx = Idx<Edge>;
-    using PIdx = Idx<Poly>;
+    using FIdx = Idx<Face>;
 
     struct AnnotatedVert
     {
         public Vert Vert;
-        public Edge OriginalEdge;       //< this is the edge which (in terms of the poly we are splitting) followed VIdx
+        public Edge OriginalEdge;       //< this is the edge which (in terms of the face we are splitting) followed VIdx
                                         //< (the edge may have been used forwards or backwards, so this doesn't mean VIdx == OriginalEdge.Start)
 
         public AnnotatedVert(Vert vert, Edge original_edge)
@@ -32,11 +32,11 @@ namespace SubD
     {
         int NextVertIdx;
         int NextEdgeIdx;
-        int NextPolyIdx;
+        int NextFaceIdx;
 
         SpatialDictionary<VIdx, Vert> NewVerts;
         SpatialDictionary<EIdx, Edge> NewEdges;
-        SpatialDictionary<PIdx, Poly> NewPolys;
+        SpatialDictionary<FIdx, Face> NewFaces;
 
         public Surface Subdivide(Surface input)
         {
@@ -47,24 +47,24 @@ namespace SubD
 
             NextVertIdx = input.Verts.Keys.Max().Value + 1;     // retain all existing ids and build new ones beyond that range
             NextEdgeIdx = 0;                                    // no edges are carried over
-            NextPolyIdx = 0;                                    // no polys are carried over
+            NextFaceIdx = 0;                                    // no faces are carried over
 
             // preserve the VIds of existing verts
             // all cloned verts are unfrozen and do not have cached Normals
             NewVerts = CloneVerts(input.Verts);
             NewEdges = [];
-            NewPolys = [];
+            NewFaces = [];
 
-            Dictionary<Poly, Vert> face_centre_map = [];
+            Dictionary<Face, Vert> face_centre_map = [];
 
             // inject face centre verts
-            foreach(Poly poly in input.Polys.Values)
+            foreach(Face face in input.Faces.Values)
             {
                 VIdx v_idx = new(NextVertIdx++);
-                Vert vert = new(poly.Centre);
+                Vert vert = new(face.Centre);
                 NewVerts[v_idx] = vert;
 
-                face_centre_map[poly] = vert;
+                face_centre_map[face] = vert;
             }
 
             Dictionary<Edge, Vert> edge_centre_map = [];
@@ -92,8 +92,8 @@ namespace SubD
                         (
                                edge.Start.Position
                             +  edge.End.Position
-                            +  face_centre_map[edge.Left].Position
-                            +  face_centre_map[edge.Right].Position
+                            +  face_centre_map[edge.Backwards].Position
+                            +  face_centre_map[edge.Forwards].Position
                         ) / 4);
                 }
 
@@ -125,11 +125,11 @@ namespace SubD
                 {
                     // smooth rule
 
-                    // num EIdxs == num PIdxs...
+                    // num EIdxs == num FIdxs...
                     int n = input_vert.Edges.Count;
 
                     Vector3 face_points_avg
-                        = input_vert.Polys
+                        = input_vert.Faces
                             .Select(x => face_centre_map[x].Position)
                             .Sum() / n;
 
@@ -164,26 +164,26 @@ namespace SubD
 
             Dictionary<(Vert, Vert), Edge> made_edges = [];
 
-            foreach(var p_pair in input.Polys)
+            foreach(var p_pair in input.Faces)
             {
-                Poly poly = p_pair.Value;
-                Edge prev_edge = poly.Edges.Last();
+                Face face = p_pair.Value;
+                Edge prev_edge = face.Edges.Last();
 
-                foreach(Edge edge in poly.Edges)
+                foreach(Edge edge in face.Edges)
                 {
                     // if we used this edge backwards, then we need to start at the End
                     // otherwise the Start
-                    VIdx start_v_idx = edge.Right == poly ? edge.Start.Key : edge.End.Key;
+                    VIdx start_v_idx = edge.Forwards == face ? edge.Start.Key : edge.End.Key;
                     Vert start = NewVerts[start_v_idx];
 
-                    AddPoly(
+                    AddFace(
                         [
                             new AnnotatedVert(start, edge),
                             new AnnotatedVert(edge_centre_map[edge], null),
-                            new AnnotatedVert(face_centre_map[poly], null),
+                            new AnnotatedVert(face_centre_map[face], null),
                             new AnnotatedVert(edge_centre_map[prev_edge], prev_edge)
                         ],
-                        poly,
+                        face,
                         made_edges
                     );
 
@@ -193,35 +193,36 @@ namespace SubD
 
             foreach(Vert vert in NewVerts.Values)
             {
-                // we added the edges and polys to the verts in a fairly arbitraty order, but we need
+                // we added the edges and faces to the verts in a fairly arbitraty order, but we need
                 // them to both be clockwise, from outside the cube, looking inwards, and...
                 //
-                // we need the two edges of the poly at position N to be N and N + 1
+                // we need the two edges of the face at position N to be N and N + 1
 
-                VertUtil.SortVertEdgesAndPolys(vert);
+                // argument "surf" not needed if we aren't allowing splitting
+                VertUtil.SortVertEdgesAndFaces(null, vert, false);
             }
 
-            Surface ret = new(NewVerts, NewEdges, NewPolys);
+            Surface ret = new(NewVerts, NewEdges, NewFaces);
 
             Reset();
 
             return ret;
         }
 
-        private void Reset()
+        void Reset()
         {
-            NextEdgeIdx = NextPolyIdx = NextVertIdx = 0;
+            NextEdgeIdx = NextFaceIdx = NextVertIdx = 0;
 
             NewVerts = null;
             NewEdges = null;
-            NewPolys = null;
+            NewFaces = null;
         }
 
-        private void AddPoly(AnnotatedVert[] v_idxs, Poly orig_poly, Dictionary<(Vert, Vert), Edge> made_edges)
+        void AddFace(AnnotatedVert[] v_idxs, Face orig_face, Dictionary<(Vert, Vert), Edge> made_edges)
         {
             List<Edge> edges = [];
-            List<Edge> left_edges = [];
-            List<Edge> right_edges = [];
+            List<Edge> backwards_edges = [];
+            List<Edge> forwards_edges = [];
 
             for(int i = 0; i < v_idxs.Length; i++)
             {
@@ -229,46 +230,46 @@ namespace SubD
                 int next_i = (i + 1) % v_idxs.Length;
                 AnnotatedVert av_next = v_idxs[next_i];
 
-                bool is_left;
-                Edge edge = AddEdge(av, av_next, made_edges, out is_left);
+                bool is_backwards;
+                Edge edge = AddEdge(av, av_next, made_edges, out is_backwards);
 
                 edges.Add(edge);
 
-                (is_left ? left_edges : right_edges).Add(edge);
+                (is_backwards ? backwards_edges : forwards_edges).Add(edge);
             }
 
-            Poly poly = new(v_idxs.Select(x => x.Vert), edges);
-            PIdx p_idx = new(NextPolyIdx++);
-            NewPolys[p_idx] = poly;
-            poly.SetMetadataFrom(orig_poly);
+            Face face = new(v_idxs.Select(x => x.Vert), edges, orig_face.GIs);
+            FIdx f_idx = new(NextFaceIdx++);
+            NewFaces[f_idx] = face;
+            face.SetMetadataFrom(orig_face);
 
-            // it's a new poly, so let all the verts know
-            foreach(Vert vert in poly.Verts)
+            // it's a new face, so let all the verts know
+            foreach(Vert vert in face.Verts)
             {
-                vert.Polys.Add(poly);
+                vert.Faces.Add(face);
             }
 
-            foreach(Edge edge in left_edges)
+            foreach(Edge edge in backwards_edges)
             {
-                edge.Left = poly;
+                edge.Backwards = face;
             }
 
-            foreach(Edge edge in right_edges)
+            foreach(Edge edge in forwards_edges)
             {
-                edge.Right = poly;
+                edge.Forwards = face;
             }
         }
 
-        private Edge AddEdge(AnnotatedVert start, AnnotatedVert end, Dictionary<(Vert, Vert), Edge> made_edges, out bool is_left)
+        Edge AddEdge(AnnotatedVert start, AnnotatedVert end, Dictionary<(Vert, Vert), Edge> made_edges, out bool is_backwards)
         {
             if (made_edges.TryGetValue((end.Vert, start.Vert), out Edge edge))
             {
-                is_left = true;
+                is_backwards = true;
 
                 return edge;
             }
 
-            is_left = false;
+            is_backwards = false;
 
             EIdx e_idx = new(NextEdgeIdx++);
 
@@ -290,7 +291,7 @@ namespace SubD
             return edge;
         }
 
-        private ImBounds GetEdgeBounds(VIdx v_idx1, VIdx v_idx2)
+        ImBounds GetEdgeBounds(VIdx v_idx1, VIdx v_idx2)
         {
             Vert v1 = NewVerts[v_idx1];
             Vert v2 = NewVerts[v_idx2];

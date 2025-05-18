@@ -8,7 +8,7 @@ namespace SubD
 
     using VertPropsFunc = System.Func<CylSection, int, CylTypes.Topology, CylTypes.VertProps>;
     using EdgePropsFunc = System.Func<CylSection, int, CylTypes.Topology, CylTypes.EdgeType, CylTypes.EdgeProps>;
-    using PolyPropsFunc = System.Func<CylSection, int, CylTypes.Topology, CylTypes.PolyProps>;
+    using FacePropsFunc = System.Func<CylSection, int, CylTypes.Topology, CylTypes.FaceProps>;
     using SectorPropsFunc = System.Func<CylSection, int, CylTypes.SectorProps>;
 
     // one section will (theoretically) be a 2-sided disk (Solid).  Side view:
@@ -32,7 +32,7 @@ namespace SubD
     //
     // HOWEVER ***we cannot generate single section structures*** because they end up
     // with the inside->outside edges and the outside->inside edges being the same edges
-    // and thus needing 2x Left and 2x Right polys, which we cannot store in the edge structure
+    // and thus needing 2x Backwards and 2x Forwards faces, which we cannot store in the edge structure
     // (could be made to work with special casing, but who would want that anyway???)
     //
     // longer constructs are made by piling those up and connecting lengthways:
@@ -100,7 +100,7 @@ namespace SubD
             private set;
         }
 
-        public PolyPropsFunc PolyCallback
+        public FacePropsFunc FaceCallback
         {
             get;
             private set;
@@ -133,7 +133,7 @@ namespace SubD
             float rot_x_degrees = 0, float rot_y_degrees = 0, float rot_z_degrees = 0,
             EdgePropsFunc edge_callback = null,
             VertPropsFunc vert_callback = null,
-            PolyPropsFunc poly_callback = null,
+            FacePropsFunc face_callback = null,
             SectorPropsFunc sector_callback = null,
             string tag = null)
             : this(
@@ -143,7 +143,7 @@ namespace SubD
                     .RotatedLocal(new Vector3(1, 0, 0), rot_x_degrees * Mathf.Pi / 180)         //< just a guess for the best order to apply these in
                     .RotatedLocal(new Vector3(0, 0, 1), rot_z_degrees * Mathf.Pi / 180)         //< (could offer some clever quat thing as well)
                     .Translated(new Vector3(0, length, 0)),
-                edge_callback, vert_callback, poly_callback, sector_callback,
+                edge_callback, vert_callback, face_callback, sector_callback,
                 tag)
         {
         }
@@ -156,7 +156,7 @@ namespace SubD
             Transform3D? transform = null,
             EdgePropsFunc edge_callback = null,
             VertPropsFunc vert_callback = null,
-            PolyPropsFunc poly_callback = null,
+            FacePropsFunc face_callback = null,
             SectorPropsFunc sector_callback = null,
             string tag = null)
         {
@@ -171,7 +171,7 @@ namespace SubD
 
             EdgeCallback = edge_callback;
             VertCallback = vert_callback;
-            PolyCallback = poly_callback;
+            FaceCallback = face_callback;
             SectorCallback = sector_callback;
 
             Tag = tag;

@@ -12,7 +12,7 @@ namespace SubD
 {
     using EIdx = Idx<Edge>;
     using VIdx = Idx<Vert>;
-    using PIdx = Idx<Poly>;
+    using FIdx = Idx<Face>;
 
     using DistortFunc = Func<Vector3, Vector3>;
 
@@ -26,7 +26,7 @@ namespace SubD
             public int OutIdx = -1;
         }
 
-        public SpatialDictionary<PIdx, Poly> Polys
+        public SpatialDictionary<FIdx, Face> Faces
         {
             get;
             private set;
@@ -45,22 +45,22 @@ namespace SubD
         }
 
         // mesh output workings, clear after each ToSurface
-        Dictionary<VIdx, Dictionary<PIdx, OutVert>> OutVerts = [];
+        Dictionary<VIdx, Dictionary<FIdx, OutVert>> OutVerts = [];
 
         int NextVIdx = 0;
         int NextEIdx = 0;
-        int NextPIdx = 0;
+        int NextFIdx = 0;
 
-        public Vector3 PolyNormal(Poly poly)
+        public Vector3 FaceNormal(Face face)
         {
-            if (poly.Normal == null)
+            if (face.Normal == null)
             {
-                Vector3[] verts = [.. poly.Verts.Select(x => x.Position)];
+                Vector3[] verts = [.. face.Verts.Select(x => x.Position)];
 
-                poly.Normal = PolyUtil.PolyNormal(verts);
+                face.Normal = FaceUtil.FaceNormal(verts);
             }
 
-            return poly.Normal.Value;
+            return face.Normal.Value;
         }
 
         public Vector3 EdgeNormal(EIdx e_idx)
@@ -69,7 +69,7 @@ namespace SubD
 
             if (edge.Normal == null)
             {
-                edge.Normal = edge.Polys.Select(x => PolyNormal(x)).Sum().Normalized();
+                edge.Normal = edge.Faces.Select(x => FaceNormal(x)).Sum().Normalized();
             }
 
             return edge.Normal.Value;
@@ -79,7 +79,7 @@ namespace SubD
         {
             if (vert.Normal == null)
             {
-                vert.Normal = vert.Polys.Select(x => PolyNormal(x)).Sum().Normalized();
+                vert.Normal = vert.Faces.Select(x => FaceNormal(x)).Sum().Normalized();
             }
 
             return vert.Normal.Value;
@@ -89,21 +89,21 @@ namespace SubD
 
         public float FaceNormalsDotProduct(Edge edge)
         {
-            return PolyNormal(edge.Left).Dot(PolyNormal(edge.Right));
+            return FaceNormal(edge.Backwards).Dot(FaceNormal(edge.Forwards));
         }
 
         public Surface(
             SpatialDictionary<VIdx, Vert> verts,
             SpatialDictionary<EIdx, Edge> edges,
-            SpatialDictionary<PIdx, Poly> polys)
+            SpatialDictionary<FIdx, Face> faces)
         {
             Verts = verts;
             Edges = edges;
-            Polys = polys;
+            Faces = faces;
 
             NextVIdx = Verts.Keys.Max().Value + 1;
             NextEIdx = Edges.Keys.Max().Value + 1;
-            NextPIdx = Polys.Keys.Max().Value + 1;
+            NextFIdx = Faces.Keys.Max().Value + 1;
 
             DebugValidate();
         }
@@ -114,7 +114,7 @@ namespace SubD
         }
 
         [Conditional("DEBUG")]
-        private void DebugValidate()
+        public void DebugValidate()
         {
             foreach (var pair in Verts)
             {
@@ -127,24 +127,24 @@ namespace SubD
                     Util.Assert(edge.Verts.Contains(vert));
                 }
 
-                // all verts which reference a poly should be referenced by the poly
-                foreach (Poly poly in vert.Polys)
+                // all verts which reference a face should be referenced by the face
+                foreach (Face face in vert.Faces)
                 {
-                    Util.Assert(poly.Verts.Contains(vert));
+                    Util.Assert(face.Verts.Contains(vert));
                 }
 
-                // poly N should lie between edges N and N + 1
-                for (int i = 0; i < vert.Polys.Count; i++)
+                // face N should lie between edges N and N + 1
+                for (int i = 0; i < vert.Faces.Count; i++)
                 {
-                    Util.Assert(vert.Polys[i].Edges.Contains(vert.Edges[i]));
-                    Util.Assert(vert.Polys[i].Edges.Contains(vert.Edges[(i + 1) % vert.Edges.Count]));
+                    Util.Assert(vert.Faces[i].Edges.Contains(vert.Edges[i]));
+                    Util.Assert(vert.Faces[i].Edges.Contains(vert.Edges[(i + 1) % vert.Edges.Count]));
                 }
             }
 
             foreach (Edge edge in Edges.Values)
             {
-                Util.Assert(edge.Left != null);
-                Util.Assert(edge.Right != null);
+                Util.Assert(edge.Backwards != null);
+                Util.Assert(edge.Forwards != null);
 
                 // all edges which reference a vert should be referenced by the vert
                 foreach (Vert vert in edge.Verts)
@@ -152,40 +152,40 @@ namespace SubD
                     Util.Assert(vert.Edges.Contains(edge));
                 }
 
-                // all edges which reference a poly should be referenced by the poly
-                foreach (Poly poly in edge.Polys)
+                // all edges which reference a face should be referenced by the face
+                foreach (Face face in edge.Faces)
                 {
-                    Util.Assert(poly.Edges.Contains(edge));
+                    Util.Assert(face.Edges.Contains(edge));
                 }
             }
 
-            foreach (var poly in Polys.Values)
+            foreach (var face in Faces.Values)
             {
-                // all polys which reference a vert should be referenced by the vert
-                foreach (Vert vert in poly.Verts)
+                // all faces which reference a vert should be referenced by the vert
+                foreach (Vert vert in face.Verts)
                 {
-                    Util.Assert(vert.Polys.Contains(poly));
+                    Util.Assert(vert.Faces.Contains(face));
                 }
 
-                // all polys which reference an edge should be referenced by the edge
-                foreach (Edge edge in poly.Edges)
+                // all faces which reference an edge should be referenced by the edge
+                foreach (Edge edge in face.Edges)
                 {
-                    Util.Assert(edge.Polys.Contains(poly));
+                    Util.Assert(edge.Faces.Contains(face));
                 }
 
-                Vert[] poly_verts = [.. poly.Verts];
-                Edge[] poly_edges = [.. poly.Edges];
+                Vert[] face_verts = [.. face.Verts];
+                Edge[] face_edges = [.. face.Edges];
 
-                Util.Assert(poly_verts.Length == poly_edges.Length);
+                Util.Assert(face_verts.Length == face_edges.Length);
 
                 // edge N should lie between Verts N and N + 1
-                for (int i = 0; i < poly_edges.Length; i++)
+                for (int i = 0; i < face_edges.Length; i++)
                 {
-                    int next_i = (i + 1) % poly_edges.Length;
+                    int next_i = (i + 1) % face_edges.Length;
 
-                    Vert v1 = poly_verts[i];
-                    Vert v2 = poly_verts[next_i];
-                    Edge edge = poly_edges[i];
+                    Vert v1 = face_verts[i];
+                    Vert v2 = face_verts[next_i];
+                    Edge edge = face_edges[i];
 
                     Util.Assert(edge.Verts.Contains(v1));
                     Util.Assert(edge.Verts.Contains(v2));
@@ -233,7 +233,7 @@ namespace SubD
                 bool force_all_separate_verts = vert.IsSharp;
 
                 Edge[] vert_edges = [.. vert.Edges];
-                Poly[] vert_polys = [.. vert.Polys];
+                Face[] vert_faces = [.. vert.Faces];
 
                 Edge first_edge = vert.Edges.FirstOrDefault(x => force_all_separate_verts || x.IsSetSharp);
 
@@ -247,18 +247,18 @@ namespace SubD
                 if(fei_idx != 0)
                 {
                     vert_edges = [.. vert_edges.Skip(fei_idx), .. vert_edges.Take(fei_idx)];
-                    vert_polys = [.. vert_polys.Skip(fei_idx), .. vert_polys.Take(fei_idx)];
+                    vert_faces = [.. vert_faces.Skip(fei_idx), .. vert_faces.Take(fei_idx)];
                 }
 
                 // we should now have the edge and face-indexes cyclically permuted, such that if there is any sharp edge it is first
                 // (if there are >1 no problem)
 
                 OutVert current = null;
-                int num_polys = 0;
+                int num_faces = 0;
 
                 for(int i = 0; i < vert_edges.Length; i++)
                 {
-                    Poly poly = vert_polys[i];
+                    Face face = vert_faces[i];
                     Edge edge = vert_edges[i];
 
                     bool is_sharp = use_angle ? edge.IsObservedSharp : edge.IsSetSharp;
@@ -268,7 +268,7 @@ namespace SubD
                         if (current != null)
                         {
                             current.Normal = current.Normal.Normalized();
-                            num_polys = 0;
+                            num_faces = 0;
                         }
 
                         current = new()
@@ -277,13 +277,13 @@ namespace SubD
                         };
                     }
 
-                    OutVerts[vert.Key][poly.Key] = current;
-                    current.Normal += PolyNormal(poly);
+                    OutVerts[vert.Key][face.Key] = current;
+                    current.Normal += FaceNormal(face);
 
-                    num_polys++;
+                    num_faces++;
                 }
 
-                if (num_polys > 0)
+                if (num_faces > 0)
                 {
                     current.Normal = current.Normal.Normalized();
                 }
@@ -313,13 +313,13 @@ namespace SubD
             return ret;
         }
 
-        private Mesh OutputMeshNormals(MeshOptions options)
+        Mesh OutputMeshNormals(MeshOptions options)
         {
             List<Vector3> verts = [];
             List<Vector3> normals = [];
             List<int> idxs = [];
 
-            bool include_poly = options.Normals_IncludePoly;
+            bool include_face = options.Normals_IncludeFace;
             bool include_edge = options.Normals_IncludeEdge;
             bool include_vert = options.Normals_IncludeVert;
             bool include_vert_split = options.Normals_IncludeSplitVert;
@@ -367,12 +367,12 @@ namespace SubD
                 }
             }
 
-            if (include_poly)
+            if (include_face)
             {
-                foreach(var pair in Polys)
+                foreach(var pair in Faces)
                 {
                     Vector3 centre = pair.Value.Centre;
-                    Vector3 normal = PolyNormal(pair.Value);
+                    Vector3 normal = FaceNormal(pair.Value);
 
                     idxs.Add(verts.Count);
                     verts.Add(centre);
@@ -401,7 +401,7 @@ namespace SubD
             return mesh;
         }
 
-        private Mesh OutputMeshLines(MeshOptions options)
+        Mesh OutputMeshLines(MeshOptions options)
         {
             List<Vector3> verts = [];
             List<Vector3> normals = [];
@@ -413,14 +413,14 @@ namespace SubD
             bool use_filter = options.Edges_Filter != null;
             float vert_offset = options.Edges_Offset;
 
-            foreach(var pair in Polys)
+            foreach(var pair in Faces)
             {
-                PIdx p_idx = pair.Key;
-                Poly poly = pair.Value;
+                FIdx f_idx = pair.Key;
+                Face face = pair.Value;
 
-                foreach(Vert vert in poly.Verts)
+                foreach(Vert vert in face.Verts)
                 {
-                    OutVert out_vert = OutVerts[vert.Key][poly.Key];
+                    OutVert out_vert = OutVerts[vert.Key][face.Key];
                     if (out_vert.OutIdx == -1)
                     {
                         out_vert.OutIdx = verts.Count;
@@ -436,17 +436,17 @@ namespace SubD
                 }
             }
 
-            foreach(var p_pair in Polys)
+            foreach(var p_pair in Faces)
             {
-                Poly poly = p_pair.Value;
+                Face face = p_pair.Value;
 
-                // we will output each line twice, once for each adjoiing poly
-                // but those polys have different normals, so *not* doing this loses info
+                // we will output each line twice, once for each adjoiing face
+                // but those faces have different normals, so *not* doing this loses info
                 // OTOH even doing it, one will be invisible or there will be Z-fighgint
                 //
                 // a more-correct approach might be to shift the edges 1 pixel *in* to their face
                 // so both can show, but that would require shader magic, I suspect...
-                foreach(Edge edge in poly.Edges)
+                foreach(Edge edge in face.Edges)
                 {
                     if (use_filter)
                     {
@@ -479,8 +479,8 @@ namespace SubD
                         }
                     }
 
-                    idxs.Add(OutVerts[edge.Start.Key][poly.Key].OutIdx);
-                    idxs.Add(OutVerts[edge.End.Key][poly.Key].OutIdx);
+                    idxs.Add(OutVerts[edge.Start.Key][face.Key].OutIdx);
+                    idxs.Add(OutVerts[edge.End.Key][face.Key].OutIdx);
                 }
             }
 
@@ -502,25 +502,25 @@ namespace SubD
             return mesh;
         }
 
-        private Mesh OutputMeshSurface(MeshOptions options)
+        Mesh OutputMeshSurface(MeshOptions options)
         {
             List<Vector3> verts = [];
             List<Vector3> normals = [];
             List<int> idxs = [];
-            bool use_filter = options.Polys_filter != null;
+            bool use_filter = options.Faces_filter != null;
 
-            foreach(var pair in Polys)
+            foreach(var pair in Faces)
             {
-                Poly poly = pair.Value;
+                Face face = pair.Value;
 
-                if (use_filter && !options.Polys_filter(poly))
+                if (use_filter && !options.Faces_filter(face))
                 {
                     continue;
                 }
 
-                foreach(Vert vert in poly.Verts)
+                foreach(Vert vert in face.Verts)
                 {
-                    OutVert out_vert = OutVerts[vert.Key][poly.Key];
+                    OutVert out_vert = OutVerts[vert.Key][face.Key];
                     if (out_vert.OutIdx == -1)
                     {
                         out_vert.OutIdx = verts.Count;
@@ -530,24 +530,24 @@ namespace SubD
                 }
             }
 
-            // split our polys apart into individual triangles
-            foreach(var pair in Polys)
+            // split our faces apart into individual triangles
+            foreach(var pair in Faces)
             {
-                Poly poly = pair.Value;
+                Face face = pair.Value;
 
-                if (use_filter && !options.Polys_filter(poly))
+                if (use_filter && !options.Faces_filter(face))
                 {
                     continue;
                 }
 
-                int vert_0_idx = OutVerts[poly.Verts[0].Key][poly.Key].OutIdx;
+                int vert_0_idx = OutVerts[face.Verts[0].Key][face.Key].OutIdx;
 
-                // build the poly from a fan of trianges around vert-0
-                for(int p = 1; p < poly.Verts.Length - 1; p++)
+                // build the face from a fan of trianges around vert-0
+                for(int p = 1; p < face.Verts.Length - 1; p++)
                 {
                     idxs.Add(vert_0_idx);
-                    idxs.Add(OutVerts[poly.Verts[p].Key][poly.Key].OutIdx);
-                    idxs.Add(OutVerts[poly.Verts[p + 1].Key][poly.Key].OutIdx);
+                    idxs.Add(OutVerts[face.Verts[p].Key][face.Key].OutIdx);
+                    idxs.Add(OutVerts[face.Verts[p + 1].Key][face.Key].OutIdx);
                 }
             }
 
@@ -589,59 +589,80 @@ namespace SubD
                 edge.Normal = null;
             }
 
-            foreach(Poly poly in Polys.Values)
+            foreach(Face face in Faces.Values)
             {
-                poly.Normal = null;
+                face.Normal = null;
             }
+        }
+
+        public VIdx AddVert(Vert vert)
+        {
+            VIdx v_idx = new(NextVIdx++);
+            Verts[v_idx] = vert;
+
+            return v_idx;
+        }
+
+        public EIdx AddEdge(Edge edge)
+        {
+            EIdx e_idx = new(NextEIdx++);
+            Edges[e_idx] = edge;
+
+            return e_idx;
+        }
+
+        public FIdx AddFace(Face face)
+        {
+            FIdx f_idx = new(NextFIdx++);
+            Faces[f_idx] = face;
+
+            return f_idx;
         }
 
         public void DumbConcat(Surface surf)
         {
             Dictionary<VIdx, Vert> v_idx_remaps = [];
             Dictionary<EIdx, Edge> e_idx_remaps = [];
-            Dictionary<PIdx, Poly> p_idx_remaps = [];
+            Dictionary<FIdx, Face> f_idx_remaps = [];
 
             List<Vert> verts_added = [];
             List<Edge> edges_added = [];
-            List<Poly> polys_added = [];
+            List<Face> faces_added = [];
 
             // initial phase: the new features will have wrong internal references pointing into surf instead
             // of our own, but we'll fix those up in a second phase...
             foreach(Vert old_vert in surf.Verts.Values)
             {
-                VIdx v_idx = new(NextVIdx++);
-
                 Vert vert = new(old_vert);
-                Verts[v_idx] = vert;
+                VIdx v_ids = AddVert(vert);
+
                 verts_added.Add(vert);
                 v_idx_remaps[old_vert.Key] = vert;
             }
 
             foreach(Edge old_edge in surf.Edges.Values)
             {
-                EIdx e_idx = new(NextEIdx++);
-
                 Edge edge = new(old_edge);
-                Edges[e_idx] = edge;
+                EIdx e_idx = AddEdge(edge);
+
                 edges_added.Add(edge);
                 e_idx_remaps[old_edge.Key] = edge;
             }
 
-            foreach(Poly old_poly in surf.Polys.Values)
+            foreach(Face old_face in surf.Faces.Values)
             {
-                PIdx p_idx = new(NextPIdx++);
+                Face face = new(old_face);
+                FIdx f_idx = AddFace(face);
 
-                Poly poly = new(old_poly);
-                Polys[p_idx] = poly;
-                polys_added.Add(poly);
-                p_idx_remaps[old_poly.Key] = poly;
+                faces_added.Add(face);
+                f_idx_remaps[old_face.Key] = face;
             }
 
             // second phase: now fixup the internal references to point to the other new stuff we just added
             foreach(Vert vert in verts_added)
             {
                 vert.Edges = [.. vert.Edges.Select(x => e_idx_remaps[x.Key])];
-                vert.Polys = [.. vert.Polys.Select(x => p_idx_remaps[x.Key])];
+                vert.Faces = [.. vert.Faces.Select(x => f_idx_remaps[x.Key])];
             }
 
             foreach(Edge edge in edges_added)
@@ -649,24 +670,71 @@ namespace SubD
                 edge.Start = v_idx_remaps[edge.Start.Key];
                 edge.End = v_idx_remaps[edge.End.Key];
 
-                if (edge.Left != null)
+                if (edge.Backwards != null)
                 {
-                    edge.Left = p_idx_remaps[edge.Left.Key];
+                    edge.Backwards = f_idx_remaps[edge.Backwards.Key];
                 }
 
-                if (edge.Right != null)
+                if (edge.Forwards != null)
                 {
-                    edge.Right = p_idx_remaps[edge.Right.Key];
+                    edge.Forwards = f_idx_remaps[edge.Forwards.Key];
                 }
             }
 
-            foreach(Poly poly in polys_added)
+            foreach(Face face in faces_added)
             {
-                poly.Verts = [.. poly.Verts.Select(x => v_idx_remaps[x.Key])];
-                poly.Edges = [.. poly.Edges.Select(x => e_idx_remaps[x.Key])];
+                face.Verts = [.. face.Verts.Select(x => v_idx_remaps[x.Key])];
+                face.Edges = [.. face.Edges.Select(x => e_idx_remaps[x.Key])];
             }
 
             DebugValidate();
+        }
+
+        public void RemoveAndRemoveReferences(Face face)
+        {
+            // remove the face first, so it doesn't get updated by any chained CompletelyRemove(edge)
+            // below, and hence can continue to be used as an archive of what the edge/verts were
+            Faces.Remove(face.Key);
+
+            foreach (Edge edge in face.Edges)
+            {
+                edge.RemoveFace(face);
+            }
+
+            foreach (Vert vert in face.Verts)
+            {
+                vert.Faces = [.. vert.Faces.Where(x => x != face)];
+            }
+        }
+
+        public void RemoveAndRemoveReferences(Edge edge)
+        {
+            Edges.Remove(edge.Key);
+
+            foreach(Face face in edge.Faces)
+            {
+                face.Edges = [.. face.Edges.Where(x => x != edge)];
+            }
+
+            foreach(Vert vert in edge.Verts)
+            {
+                vert.Edges.Remove(edge);
+            }
+        }
+
+        public void RemoveAndRemoveReferences(Vert vert)
+        {
+            Verts.Remove(vert.Key);
+
+            foreach(Face face in vert.Faces)
+            {
+                face.Verts = [.. face.Verts.Where(x => x != vert)];
+            }
+
+            foreach(Edge edge in vert.Edges)
+            {
+                edge.RemoveVert(vert);
+            }
         }
     }
 }

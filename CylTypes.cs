@@ -57,16 +57,16 @@ namespace SubD.CylTypes
         }
     }
 
-    public struct PolyProps
+    public struct FaceProps
     {
         public string Tag;
 
-        public PolyProps()
+        public FaceProps()
             : this(null)
         {
         }
 
-        public PolyProps(string tag = null)
+        public FaceProps(string tag = null)
         {
             Tag = tag;
         }
@@ -87,8 +87,8 @@ namespace SubD.CylTypes
         // X in this case is the direction around the cylinder
         // Y is the direction along the cylinder
         // (makes sense if the cylinder is upright)
-        public float Radius;        //< if Clearance not set, available space on the polygon targetted must be 5% larger than this
-        public float? Clearance;    //< if Clearance set, then hole size is calculated this much in from the existing poly corners
+        public float Radius;        //< if Clearance not set, available space on the face targetted must be 5% larger than this
+        public float? Clearance;    //< if Clearance set, then hole size is calculated this much in from the existing face corners
 
         // if there is not room for any of the above cases, then the hole is skipped
 
@@ -127,7 +127,7 @@ namespace SubD.CylTypes
         Circumferential,            //< running round the section
         Axial,                      //< running forwards<->>backwards between sections
         HoleEdge,                   //< running around the edge of a hole
-        HoleDiagonal,               //< from the corners of the polygon the hole is in, to the corners of the hole
+        HoleDiagonal,               //< from the corners of the face the hole is in, to the corners of the hole
         Hole                        //< running from the outside to the inside, along the length of the hole
     }
 }

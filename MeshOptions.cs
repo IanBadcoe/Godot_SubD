@@ -4,7 +4,7 @@ namespace SubD
 {
     public struct MeshOptions
     {
-        public Func<Poly, bool> Polys_filter = null;
+        public Func<Face, bool> Faces_filter = null;
 
         public bool Edges_IncludeSharp = true;
         public bool Edges_IncludeSmooth = true;
@@ -21,7 +21,7 @@ namespace SubD
         public bool Normals_IncludeVert = false;
         public bool Normals_IncludeSplitVert = false;
         public bool Normals_IncludeEdge = false;               //< nothing uses these, but could be of interest
-        public bool Normals_IncludePoly = false;
+        public bool Normals_IncludeFace = false;
 
         public float? SplitAngleDegrees;                        //< if set, overrides splitting along edges tagged sharp
                                                                 //< and instead splits along those with > this angle across them

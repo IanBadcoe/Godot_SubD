@@ -13,7 +13,7 @@ namespace SubD.Builders
 {
     using VIdx = Idx<Vert>;
     using EIdx = Idx<Edge>;
-    using PIdx = Idx<Poly>;
+    using FIdx = Idx<Face>;
 
     public class Cube : IGeneratorIdentity
     {
@@ -368,25 +368,28 @@ namespace SubD.Builders
             }
         }
 
-        List<Cube> Cubes;
+        Dictionary<Cube, int> Cubes;
 
         public BuildFromCubes()
         {
             Reset();
         }
 
-        public Cube AddCube(Vector3I position)
+        public Cube AddCube(Vector3I position, int merge_group = 1)
         {
             Cube cube = new(position);
 
-            Cubes.Add(cube);
+            Cubes.Add(cube, merge_group);
+
+
+            Dirty = true;
 
             return cube;
         }
 
         public void RemoveCube(Vector3I position)
         {
-            Cubes = [.. Cubes.Where(x => x.Position != position)];
+            Cubes = Cubes.Where(x => x.Key.Position != position).ToDictionary();
         }
 
         Dictionary<Cube.VertName, Vert> CubeToVerts(Cube cube, SpatialDictionary<VIdx, Vert> verts)
@@ -428,16 +431,16 @@ namespace SubD.Builders
             Cubes = [];
         }
 
-        protected override void PopulateMergeStock()
+        protected override void PopulateMergeStock_Impl()
         {
-            foreach(Cube cube in Cubes)
+            foreach(var pair in Cubes)
             {
                 MergeStock.Add(
                     new AnnotatedPolyhedron
                     {
-                        MergeGroup = 1,
-                        GeneratorIdentity = cube,
-                        Polyhedron = PopulateCube(cube)
+                        MergeGroup = pair.Value,
+                        GeneratorIdentity = pair.Key,
+                        Polyhedron = PopulateCube(pair.Key)
                     }
                 );
             }
@@ -447,7 +450,7 @@ namespace SubD.Builders
         {
             SpatialDictionary<VIdx, Vert> verts = [];
             SpatialDictionary<EIdx, Edge> edges = [];
-            SpatialDictionary<PIdx, Poly> polys = [];
+            SpatialDictionary<FIdx, Face> faces = [];
             Dictionary<Cube.VertName, Vert> named_verts = CubeToVerts(cube, verts);
 
             VertCube vc = new(named_verts, cube);
@@ -455,44 +458,44 @@ namespace SubD.Builders
             Dictionary<(Vert start, Vert end), Edge> made_edges = [];
 
             int next_e_idx = 0;
-            int next_p_idx = 0;
+            int next_f_idx = 0;
 
             foreach(var f_name in FaceNameUtils.AllFaces)
             {
                 Vert[] face_verts = [.. FaceNameUtils.GetVertsForFace(f_name).Select(x => vc.VertMap[x])];
                 List<Edge> face_edges;
-                List<Edge> left_edges;
-                List<Edge> right_edges;
+                List<Edge> backwards_edges;
+                List<Edge> forwards_edges;
 
                 FindMakeFaceEdges(
                     vc,
                     made_edges, edges,
                     ref next_e_idx, face_verts,
                     out face_edges,
-                    out left_edges,
-                    out right_edges);
+                    out backwards_edges,
+                    out forwards_edges);
 
-                Poly poly = new(face_verts, face_edges);
+                Face face = new(face_verts, face_edges, cube);
 
-                PIdx p_idx = new(next_p_idx++);
-                polys[p_idx] = poly;
+                FIdx f_idx = new(next_f_idx++);
+                faces[f_idx] = face;
 
-                // it's a new poly, so let all the verts know
-                foreach (Vert vert in poly.Verts)
+                // it's a new face, so let all the verts know
+                foreach (Vert vert in face.Verts)
                 {
-                    vert.Polys.Add(poly);
+                    vert.Faces.Add(face);
                 }
 
                 // forward edges will have the new face on their right
                 // backward ones on the left...
-                foreach (Edge edge in left_edges)
+                foreach (Edge edge in backwards_edges)
                 {
-                    edge.Left = poly;
+                    edge.Backwards = face;
                 }
 
-                foreach (Edge edge in right_edges)
+                foreach (Edge edge in forwards_edges)
                 {
-                    edge.Right = poly;
+                    edge.Forwards = face;
                 }
             }
 
@@ -500,14 +503,16 @@ namespace SubD.Builders
 
             foreach(Vert vert in verts.Values)
             {
-                // we added the edges and polys to the verts in a fairly arbitraty order, but we need
+                // we added the edges and faces to the verts in a fairly arbitraty order, but we need
                 // them to both be clockwise, from outside the cube, looking inwards, and...
                 //
-                // we need the two edges of the poly at position N to be N and N + 1
-                VertUtil.SortVertEdgesAndPolys(vert);
+                // we need the two edges of the face at position N to be N and N + 1
+
+                // argument "surf" not needed if we aren't allowing splitting
+                VertUtil.SortVertEdgesAndFaces(null, vert, false);
             }
 
-            return new(verts, edges, polys);
+            return new(verts, edges, faces);
         }
 
         private static void FindMakeFaceEdges(
@@ -517,12 +522,12 @@ namespace SubD.Builders
             ref int next_e_idx,
             Vert[] face_verts,
             out List<Edge> face_edges,
-            out List<Edge> left_edges,
-            out List<Edge> right_edges)
+            out List<Edge> backwards_edges,
+            out List<Edge> forwards_edges)
         {
             face_edges = [];
-            left_edges = [];
-            right_edges = [];
+            backwards_edges = [];
+            forwards_edges = [];
 
             for (int i = 0; i < face_verts.Length; i++)
             {
@@ -537,7 +542,7 @@ namespace SubD.Builders
                 if (made_edges.TryGetValue((next_vert, vert), out edge))
                 {
                     face_edges.Add(edge);
-                    left_edges.Add(edge);
+                    backwards_edges.Add(edge);
                 }
                 else
                 {
@@ -546,7 +551,7 @@ namespace SubD.Builders
 
                     edges[e_idx] = edge;
                     face_edges.Add(edge);
-                    right_edges.Add(edge);
+                    forwards_edges.Add(edge);
 
                     // it's a new edge, so let the two verts know
                     edge.Start.Edges.Add(edge);

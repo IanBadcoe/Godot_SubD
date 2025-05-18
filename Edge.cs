@@ -12,11 +12,11 @@ using Godot_Util.CSharp_Util;
 
 namespace SubD
 {
-    using PIdx = Idx<Poly>;
+    using FIdx = Idx<Face>;
     using VIdx = Idx<Vert>;
     using EIdx = Idx<Edge>;
 
-    [DebuggerDisplay("{Start}->{End} Left: {SubD.Idx<SubD.Poly>.Idx2String(Left)} Right: {SubD.Idx<SubD.Poly>.Idx2String(Right)} Sharp: {IsSharp}")]
+    [DebuggerDisplay("{Key.Value} : {Start.Key}->{End.Key} Forwards:{Forwards.Key} Backwards:{Backwards.Key} SetSharp: {IsSetSharp}")]
     public class Edge : ISpatialValue<EIdx>
     {
         public Vert Start
@@ -62,34 +62,17 @@ namespace SubD
         }
 #endregion
 
-        // left and right adjoining polys, if there are any, in the Start->End direction viewed from "outside"
-        // (this means that the "right" poly uses this edge in the "forwards" direction)
+        // if there currently are any, the meaning of "Forwards" is that face uses this edge's verts
+        // in the forwards (Start -> End) direction, where the backwards face uses them the other way around
+        // every edge will be used once forwards, and once backwards, because faces all need to rotate the same way
+        // so along the contact edge, one is going one way, and one the other...
+        //
+        // (this is true, even if they meet at an acute angle, because "rotation" has to be measured looking along
+        //  the face normal)
 
-        Poly LeftInner;
-        public Poly Left
-        {
-            get
-            {
-                return LeftInner;
-            }
-            set
-            {
-                LeftInner = value;
-            }
-        }
+        public Face Backwards { get; set; }
 
-        Poly RightInner;
-        public Poly Right
-        {
-            get
-            {
-                return RightInner;
-            }
-            set
-            {
-                RightInner = value;
-            }
-        }
+        public Face Forwards { get; set; }
 
         public IEnumerable<Vert> Verts
         {
@@ -100,18 +83,18 @@ namespace SubD
             }
         }
 
-        public IEnumerable<Poly> Polys
+        public IEnumerable<Face> Faces
         {
             get
             {
-                if (Left != null)
+                if (Backwards != null)
                 {
-                    yield return Left;
+                    yield return Backwards;
                 }
 
-                if (Right != null)
+                if (Forwards != null)
                 {
-                    yield return Right;
+                    yield return Forwards;
                 }
             }
         }
@@ -121,17 +104,17 @@ namespace SubD
         public Vector3 MidPoint => (Start.Position + End.Position) / 2;
 
         // potentially dangerous as *shallow* copy
-        public Edge(Vert start, Vert end, Poly left = null, Poly right = null)
+        public Edge(Vert start, Vert end, Face backwards = null, Face forwards = null)
         {
             Start = start;
             End = end;
 
-            Left = left;
-            Right = right;
+            Backwards = backwards;
+            Forwards = forwards;
         }
 
         // potentially dangerous as *shallow* copy
-        public Edge(Edge old_edge) : this(old_edge.Start, old_edge.End, old_edge.Left, old_edge.Right)
+        public Edge(Edge old_edge) : this(old_edge.Start, old_edge.End, old_edge.Backwards, old_edge.Forwards)
         {
             SetMetaDataFrom(old_edge);
         }
@@ -150,27 +133,27 @@ namespace SubD
             return null;
         }
 
-        public Poly OtherPoly(Poly poly)
+        public Face OtherFace(Face face)
         {
-            if (poly == Left)
+            if (face == Backwards)
             {
-                return Right;
+                return Forwards;
             }
 
-            Util.Assert(poly == Right);
+            Util.Assert(face == Forwards);
 
-            return Left;
+            return Backwards;
         }
 
-        public void RemovePoly(Poly poly)
+        public void RemoveFace(Face face)
         {
-            if (poly == Left)
+            if (face == Backwards)
             {
-                LeftInner = null;
+                Backwards = null;
             }
-            else if (poly == Right)
+            else if (face == Forwards)
             {
-                RightInner = null;
+                Forwards = null;
             }
             else
             {
@@ -180,7 +163,7 @@ namespace SubD
 
         public Edge Reversed()
         {
-            return new Edge(End, Start, Right, Left);
+            return new Edge(End, Start, Forwards, Backwards);
         }
 
         public void SetMetaDataFrom(Edge original_edge)
@@ -192,6 +175,22 @@ namespace SubD
         public ImBounds GetBounds()
         {
             return Start.GetBounds().UnionedWith(End.GetBounds());
+        }
+
+        internal void RemoveVert(Vert vert)
+        {
+            // an edge with a null vert is an incredibly disfunctional thing, should only do this as a step on the way
+            // to removing the edge, or other highly transient state
+            if (vert == Start)
+            {
+                Start = null;
+            }
+            else
+            {
+                Util.Assert(vert == End);
+
+                End = null;
+            }
         }
     }
 }

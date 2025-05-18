@@ -14,9 +14,9 @@ namespace SubD
 {
     using VIdx = SubD.Idx<SubD.Vert>;
     using EIdx = SubD.Idx<SubD.Edge>;
-    using PIdx = SubD.Idx<SubD.Poly>;
+    using FIdx = SubD.Idx<SubD.Face>;
 
-    [DebuggerDisplay("Position = {Position}")]
+    [DebuggerDisplay("{Key} Position = {Position}")]
     public class Vert : ISpatialValue<VIdx>
     {
         public Vector3 Position
@@ -27,7 +27,7 @@ namespace SubD
 
         public List<Edge> Edges { get; set; } = [];
 
-        public List<Poly> Polys { get; set; } = [];
+        public List<Face> Faces { get; set; } = [];
 
         // normal is cached on here when calculated by the Surface
         // could just cache that inside the Surface
@@ -58,14 +58,14 @@ namespace SubD
         }
 
         // potentially dangerous as *shallow* copy
-        public Vert(Vector3 pos, IEnumerable<Edge> edges, IEnumerable<Poly> polys) : this(pos)
+        public Vert(Vector3 pos, IEnumerable<Edge> edges, IEnumerable<Face> faces) : this(pos)
         {
             Edges = [.. edges];
-            Polys = [.. polys];
+            Faces = [.. faces];
         }
 
         // potentially dangerous as *shallow* copy
-        public Vert(Vert old_vert) : this(old_vert.Position, old_vert.Edges, old_vert.Polys)
+        public Vert(Vert old_vert) : this(old_vert.Position, old_vert.Edges, old_vert.Faces)
         {
             SetMetadataFrom(old_vert);
         }
@@ -80,7 +80,7 @@ namespace SubD
             }
             else
             {
-                ret = new Vert(Position, Edges, Polys);
+                ret = new Vert(Position, Edges, Faces);
             }
 
             ret.SetMetadataFrom(this);

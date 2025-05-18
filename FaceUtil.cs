@@ -4,9 +4,9 @@ using Godot_Util;
 
 namespace SubD
 {
-    public static class PolyUtil
+    public static class FaceUtil
     {
-        public static Vector3 PolyNormal(Vector3[] verts)
+        public static Vector3 FaceNormal(Vector3[] verts)
         {
             Vector3 last_delta = verts[1] - verts[0];
 
@@ -26,7 +26,7 @@ namespace SubD
             return accum.Normalized();
         }
 
-        public static Vector3 PolyCentre(Vector3[] verts)
+        public static Vector3 FaceCentre(Vector3[] verts)
         {
             return verts.Sum() / verts.Length;
         }

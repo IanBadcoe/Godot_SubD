@@ -11,7 +11,7 @@ namespace SubD
 
     public class VertLoop
     {
-        public VIdx[] VIdxs
+        public Vert[] Verts
         {
             get;
             private set;
@@ -23,21 +23,21 @@ namespace SubD
             private set;
         }
 
-        public VertLoop(IEnumerable<VIdx> v_idxs, Topology topology)
+        public VertLoop(IEnumerable<Vert> verts, Topology topology)
         {
-            VIdxs = [.. v_idxs];
+            Verts = [.. verts];
             Topology = topology;
         }
 
         public VertLoop Reversed()
         {
-            return new VertLoop(VIdxs.Reverse(), Topology);
+            return new VertLoop(Verts.Reverse(), Topology);
         }
 
         public VertLoop Shift(int step)
         {
-            step = (step + VIdxs.Length) % VIdxs.Length;
-            return new VertLoop(VIdxs.Skip(step).Concat(VIdxs.Take(step)), Topology);
+            step = (step + Verts.Length) % Verts.Length;
+            return new VertLoop(Verts.Skip(step).Concat(Verts.Take(step)), Topology);
         }
     }
 }
