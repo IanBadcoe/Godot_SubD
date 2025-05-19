@@ -116,10 +116,11 @@ namespace SubD
         [Conditional("DEBUG")]
         public void DebugValidate()
         {
-            foreach (var pair in Verts)
+            foreach (Vert vert in Verts.Values)
             {
-                Vert vert = pair.Value;
-                VIdx v_idx = pair.Key;
+                // we can transiently have these during operations on surfaces, but we expect people to have tidied up before now
+                Util.Assert(vert.Edges.Count > 0);
+                Util.Assert(vert.Faces.Count > 0);
 
                 // all verts which reference an edge should be referenced by the edge
                 foreach (Edge edge in vert.Edges)
@@ -143,6 +144,8 @@ namespace SubD
 
             foreach (Edge edge in Edges.Values)
             {
+                Util.Assert(edge.Start != null);
+                Util.Assert(edge.End != null);
                 Util.Assert(edge.Backwards != null);
                 Util.Assert(edge.Forwards != null);
 
@@ -176,6 +179,7 @@ namespace SubD
                 Vert[] face_verts = [.. face.Verts];
                 Edge[] face_edges = [.. face.Edges];
 
+                Util.Assert(face_verts.Length > 0);
                 Util.Assert(face_verts.Length == face_edges.Length);
 
                 // edge N should lie between Verts N and N + 1

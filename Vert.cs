@@ -7,6 +7,7 @@ using Geom_Util;
 using Geom_Util.Interfaces;
 
 using Godot_Util.CSharp_Util;
+using Godot_Util;
 
 
 
@@ -19,10 +20,18 @@ namespace SubD
     [DebuggerDisplay("{Key} Position = {Position}")]
     public class Vert : ISpatialValue<VIdx>
     {
+        Vector3 _position;
         public Vector3 Position
         {
-            get;
-            set;
+            get => _position;
+            set
+            {
+                Util.Assert(float.IsRealNumber(value.X));
+                Util.Assert(float.IsRealNumber(value.Y));
+                Util.Assert(float.IsRealNumber(value.Z));
+
+                _position = value;
+            }
         }
 
         public List<Edge> Edges { get; set; } = [];

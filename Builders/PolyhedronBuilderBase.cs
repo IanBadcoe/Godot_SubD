@@ -1,4 +1,4 @@
-#define PROFILE_ON
+// #define PROFILE_ON
 
 using System;
 using System.Collections.Generic;
@@ -12,9 +12,9 @@ using Geom_Util;
 
 namespace SubD.Builders
 {
-    using VIdx = Idx<Vert>;
-    using EIdx = Idx<Edge>;
-    using FIdx = Idx<Face>;
+    // using VIdx = Idx<Vert>;
+    // using EIdx = Idx<Edge>;
+    // using FIdx = Idx<Face>;
 
     // the basis of merging is as follows:
     // all the incoming polyhedra are in a MergeGroup (currently an int, but can become an object
@@ -94,6 +94,7 @@ namespace SubD.Builders
 
         public void ForbidSpecificMerge(IGeneratorIdentity id1, IGeneratorIdentity id2)
         {
+            // put it in both ways, to make searching easier
             ForbiddenMerges.Add((id1, id2));
             ForbiddenMerges.Add((id2, id1));
 
@@ -101,10 +102,13 @@ namespace SubD.Builders
         }
 
         // polyhedra are:
-        // - convex
-        // - tagged with a "group-id"
-        // -- polyhedra tagged the same are merged at all points of contact
-        // --- UNLESS they are a pair, specifically excluded from merging
+        // - convex - not actually required, but there may be more awkward corner-cases I did not test if nonconvex
+        // - tagged with a "merge-group-id" - defaults to zero, but that *is* a valid merge-group-id
+        // -- polyhedra tagged the same are merged at all common faces
+        // -- have the skeleton where I may add vert-vert and edge-edge merges later, if I need them
+        // - tagged with a IGeneratorIdentity (GI)
+        // -- can be null
+        // -- chosen pairs of GIs can be specific excluded from merging, even if in the same group
         protected abstract void PopulateMergeStock_Impl();
 
         void PopulateMergeStock()
@@ -204,34 +208,34 @@ namespace SubD.Builders
         {
             // not sure if I need this
             // if I do, redo via RTree search in inner loop
-            // List<Vert> verts = surf.Verts.Values.ToList();
+            List<Vert> verts = surf.Verts.Values.ToList();
 
-            // for(int i = 0; i < verts.Count - 1; i++)
-            // {
-            //     Vert vert1 = verts[i];
+            for(int i = 0; i < verts.Count - 1; i++)
+            {
+                Vert vert1 = verts[i];
 
-            //     if (!surf.Verts.Contains(vert1))
-            //     {
-            //         // gone in an earier merge
-            //         continue;
-            //     }
+                if (!surf.Verts.Contains(vert1))
+                {
+                    // gone in an earier merge
+                    continue;
+                }
 
-            //     for(int j = i + 1; j < verts.Count; j++)
-            //     {
-            //         Vert vert2 = verts[j];
+                for(int j = i + 1; j < verts.Count; j++)
+                {
+                    Vert vert2 = verts[j];
 
-            //         if (!surf.Verts.Contains(vert2))
-            //         {
-            //             // gone in an earier merge
-            //             continue;
-            //         }
+                    if (!surf.Verts.Contains(vert2))
+                    {
+                        // gone in an earier merge
+                        continue;
+                    }
 
-            //         if (AreVertMergeTargets(surf, vert1, vert2))
-            //         {
-            //             MergeVertPair(surf, vert1, vert2);
-            //         }
-            //     }
-            // }
+                    if (AreVertMergeTargets(surf, vert1, vert2))
+                    {
+                        MergeVertPair(surf, vert1, vert2);
+                    }
+                }
+            }
         }
 
         private void MergeVertPair(Surface surf, Vert vert1, Vert vert2)
@@ -358,8 +362,6 @@ namespace SubD.Builders
             // first we need to know which edges are equivalent
             List<(Edge edge1, Edge edge2)> paired_edges = PairEdges(face1.Edges, face2.Edges);
 
-            List<Vert> verts_still_in_use = [];
-
             foreach ((Edge leaving_edge, Edge remaining_edge) in paired_edges)
             {
                 // can this be the same operation as a general edge merge?
@@ -393,16 +395,17 @@ namespace SubD.Builders
                 }
                 else
                 {
-                    // if the edge *is* alerady common, then it's not been removed...
+                    // if the edge *is* alerady common, then it's not automatically being removed...
                     //
-                    // however, in the cases I have aseen so far, it's got no faces left on it (if you consider the diagram
-                    // in the comment above, at the end, the remaining edge c4' is stranded crossing a gap that no edges bridge
-                    // anymore
+                    // however, in some cases, it's got no faces left on it (if you consider the diagram
+                    // in the comment above, at the end, the remaining edge c4' is stranded crossing a gap that no faces bridge
+                    // anymore)
                     //
-                    // it's verts are still in use (for the edges of the four surrounding quads)
-                    verts_still_in_use.Add(leaving_edge.Start);
-                    verts_still_in_use.Add(leaving_edge.End);
-
+                    // its verts are still in use (for the edges of the four surrounding quads)
+                    //
+                    // but sometimes (e.g. seen testing filled 2x2x2 volume of cubes with random forbidden merges) there are cases
+                    // where it is
+                    //
                     // but the edge will be out of use now (however if I have the following conditional
                     // that will hopefully cover any cases where it hasn't, if there are any...)
                     if (!leaving_edge.Faces.Any())
@@ -413,18 +416,15 @@ namespace SubD.Builders
                         surf.Edges.Remove(leaving_edge.Key);
                     }
                 }
-
-                int fnc = surf.Edges.Values.Where(x => x.Forwards == null).Count();
-                int bnc = surf.Edges.Values.Where(x => x.Backwards == null).Count();
             }
 
             // because of the order we paired them up in, and the second edge argument of MergeEdgesWithFaceSpace
-            // being the "remaining" edge, the verts of face2 are the ones still in use and the verts of face1 the
-            // discarded ones
+            // being the "remaining" edge, the verts of face2 are the ones potentially still in use and the verts of face1 the
+            // discarded ones *HOWEVER* a vert of face2 may not now have any faces left (if face1/face2 were all it had)
 
             // if we need to split any verts, we'll modify the vert on face2,
-            // so taker a copy for iteration
-            Vert[] remaining_verts = face2.Verts.ToArray();
+            // so take a copy for iteration
+            Vert[] remaining_verts = face2.Verts.Where(x => x.Faces.Any()).ToArray();
             foreach(Vert vert in remaining_verts)
             {
                 // we messed with the edges are faces on these
@@ -432,19 +432,18 @@ namespace SubD.Builders
                 VertUtil.SortVertEdgesAndFaces(surf, vert, true);
             }
 
-            foreach(Vert vert in face1.Verts)
+            // and the verts which are not still required, are the union of the verts from the two faces
+            // *minus* the ones in remaining_verts
+            //
+            // (any new verts added by splitting in SortVertEdgesAndFaces are a) definitely in use and b) not in either
+            // face, so they won't feature here anyway...)
+            foreach(Vert vert in face1.Verts.Concat(face2.Verts).Where(x => !remaining_verts.Contains(x)).Distinct())
             {
-                if (!face2.Verts.Contains(vert))
-                {
-                    if (!verts_still_in_use.Contains(vert))
-                    {
-                        // check it is not still references by any edge/face
-                        Util.Assert(!surf.Edges.Values.SelectMany(x => x.Verts).Distinct().Contains(vert));
-                        Util.Assert(!surf.Faces.Values.SelectMany(x => x.Verts).Distinct().Contains(vert));
+                // check it is not still referenced by any edge/face
+                Util.Assert(!surf.Edges.Values.SelectMany(x => x.Verts).Distinct().Contains(vert));
+                Util.Assert(!surf.Faces.Values.SelectMany(x => x.Verts).Distinct().Contains(vert));
 
-                        surf.Verts.Remove(vert.Key);
-                    }
-                }
+                surf.Verts.Remove(vert.Key);
             }
 
 #if DEBUG
@@ -648,7 +647,7 @@ namespace SubD.Builders
                 return false;
             }
 
-            if (IsMergeFobidden(face1, face2))
+            if (IsMergeForbidden(face1, face2))
             {
                 return false;
             }
@@ -693,7 +692,7 @@ namespace SubD.Builders
             return true;
         }
 
-        bool IsMergeFobidden(IHasGeneratiorIdentities feature1, IHasGeneratiorIdentities feature2)
+        bool IsMergeForbidden(IHasGeneratiorIdentities feature1, IHasGeneratiorIdentities feature2)
         {
             foreach (IGeneratorIdentity gi1 in feature1.GIs)
             {

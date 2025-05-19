@@ -46,7 +46,7 @@ namespace SubD
 
         public FIdx Key { get; set; }
 
-        public HashSet<IGeneratorIdentity> GIs { get; } = [];
+        public HashSet<IGeneratorIdentity> GIs { get; private set; }
 
         public Vector3 Centre => Verts.Select(x => x.Position).Sum() / Verts.Length;
 
@@ -98,8 +98,8 @@ namespace SubD
             Verts = [.. old_face.Verts];
             Edges = [.. old_face.Edges];
 
-             // not sure whether to call "GI" metadata or not...
-            GIs = old_face.GIs;
+            // not sure whether to call "GIs" metadata or not...
+            // I will!
 
             SetMetadataFrom(old_face);
         }
@@ -107,6 +107,8 @@ namespace SubD
         public void SetMetadataFrom(Face original_face)
         {
             Tag = original_face.Tag;
+            GIs = original_face.GIs;
+
         }
 
         public ImBounds GetBounds()

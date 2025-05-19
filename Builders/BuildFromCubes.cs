@@ -381,7 +381,6 @@ namespace SubD.Builders
 
             Cubes.Add(cube, merge_group);
 
-
             Dirty = true;
 
             return cube;
