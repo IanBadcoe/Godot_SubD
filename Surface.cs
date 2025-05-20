@@ -7,6 +7,8 @@ using Godot;
 
 using Godot_Util;
 using Godot_Util.CSharp_Util;
+using Geom_Util.Interfaces;
+using Geom_Util;
 
 namespace SubD
 {
@@ -17,7 +19,7 @@ namespace SubD
     using DistortFunc = Func<Vector3, Vector3>;
 
     [DebuggerDisplay("Verts = Vert.Count, Edges = Edge.Count, Faces = Face.Count")]
-    public partial class Surface
+    public partial class Surface : IBounded
     {
         public class OutVert
         {
@@ -26,6 +28,11 @@ namespace SubD
             public int OutIdx = -1;
         }
 
+        // at the moment, we need Faces to have IsSpatialEnabled = true
+        // we could optionally turn that on for Edges and Verts, if we needed that
+        // it might make sense to track that more at the surface level, but I am not
+        // sure, another possibility would be for high-level algorithms to just turn it
+        // on (and maybe off) as required...
         public SpatialDictionary<FIdx, Face> Faces
         {
             get;
@@ -105,7 +112,7 @@ namespace SubD
             NextEIdx = Edges.Keys.Max().Value + 1;
             NextFIdx = Faces.Keys.Max().Value + 1;
 
-            DebugValidate();
+            // DebugValidate();
         }
 
         public Surface(Surface old)
@@ -638,7 +645,7 @@ namespace SubD
             foreach(Vert old_vert in surf.Verts.Values)
             {
                 Vert vert = new(old_vert);
-                VIdx v_ids = AddVert(vert);
+                VIdx v_idx = AddVert(vert);
 
                 verts_added.Add(vert);
                 v_idx_remaps[old_vert.Key] = vert;
@@ -691,14 +698,14 @@ namespace SubD
                 face.Edges = [.. face.Edges.Select(x => e_idx_remaps[x.Key])];
             }
 
-            DebugValidate();
+            // DebugValidate();
         }
 
         public void RemoveAndRemoveReferences(Face face)
         {
             // remove the face first, so it doesn't get updated by any chained CompletelyRemove(edge)
             // below, and hence can continue to be used as an archive of what the edge/verts were
-            Faces.Remove(face.Key);
+            Faces.Remove(face);
 
             foreach (Edge edge in face.Edges)
             {
@@ -713,7 +720,7 @@ namespace SubD
 
         public void RemoveAndRemoveReferences(Edge edge)
         {
-            Edges.Remove(edge.Key);
+            Edges.Remove(edge);
 
             foreach(Face face in edge.Faces)
             {
@@ -728,7 +735,7 @@ namespace SubD
 
         public void RemoveAndRemoveReferences(Vert vert)
         {
-            Verts.Remove(vert.Key);
+            Verts.Remove(vert);
 
             foreach(Face face in vert.Faces)
             {
@@ -739,6 +746,11 @@ namespace SubD
             {
                 edge.RemoveVert(vert);
             }
+        }
+
+        public ImBounds GetBounds()
+        {
+            return Faces.Values.Aggregate(new ImBounds(), (x, y) => x.UnionedWith(y.GetBounds()));
         }
     }
 }

@@ -39,7 +39,7 @@ namespace SubD.Builders
         int NextSectionIdx = 0;
 
         SpatialDictionary<VIdx, Vert> NewVerts = [];
-        SpatialDictionary<EIdx, Edge> NewEdges = new();
+        SpatialDictionary<EIdx, Edge> NewEdges = [];
         SpatialDictionary<FIdx, Face> NewFaces = [];
 
         Dictionary<(SectionIdx section, int sector, int sub_sector, Topology Topology), FIdx> FaceMap = [];
@@ -51,8 +51,8 @@ namespace SubD.Builders
             NextFIdx = 0;
 
             NewVerts = [];
-            NewEdges = new();
-            NewFaces = [];
+            NewEdges = [];
+            NewFaces = []];
 
             FaceMap = [];
         }
@@ -311,7 +311,7 @@ namespace SubD.Builders
                 edge.RemoveFace(face);
             }
 
-            NewFaces.Remove(f_idx);
+            NewFaces.Remove(face);
             // not efficient :-o
             FaceMap.Remove(FaceMap.Where(x => x.Value == f_idx).First().Key);
         }

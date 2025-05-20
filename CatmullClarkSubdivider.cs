@@ -45,14 +45,14 @@ namespace SubD
                 return null;
             }
 
-            NextVertIdx = input.Verts.Keys.Max().Value + 1;     // retain all existing ids and build new ones beyond that range
+            NextVertIdx = input.Verts.Keys.Max().Value + 1;     // retain all existing idxs and build new ones beyond that range
             NextEdgeIdx = 0;                                    // no edges are carried over
             NextFaceIdx = 0;                                    // no faces are carried over
 
             // preserve the VIds of existing verts
             // all cloned verts are unfrozen and do not have cached Normals
-            NewVerts = CloneVerts(input.Verts);
-            NewEdges = [];
+            NewVerts = CloneVerts(input.Verts, SpatialStatus.Disabled);       // we don't need "IsSpatialEnabled", let whoever does need it turn it on
+            NewEdges = [];                           // we don't need "IsSpatialEnabled", let whoever does need it turn it on
             NewFaces = [];
 
             Dictionary<Face, Vert> face_centre_map = [];
@@ -291,17 +291,9 @@ namespace SubD
             return edge;
         }
 
-        ImBounds GetEdgeBounds(VIdx v_idx1, VIdx v_idx2)
+        SpatialDictionary<VIdx, Vert> CloneVerts(SpatialDictionary<VIdx, Vert> verts, SpatialStatus spatial_status)
         {
-            Vert v1 = NewVerts[v_idx1];
-            Vert v2 = NewVerts[v_idx2];
-
-            return v1.GetBounds().UnionedWith(v2.GetBounds());
-        }
-
-        SpatialDictionary<VIdx, Vert> CloneVerts(SpatialDictionary<VIdx, Vert> verts)
-        {
-            SpatialDictionary<VIdx, Vert> ret = [];
+            SpatialDictionary<VIdx, Vert> ret = new(spatial_status);
 
             foreach(var pair in verts)
             {

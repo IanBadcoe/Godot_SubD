@@ -94,7 +94,7 @@ namespace SubD.Builders
 
         public void ForbidSpecificMerge(IGeneratorIdentity id1, IGeneratorIdentity id2)
         {
-            // put it in both ways, to make searching easier
+            // put it in both ways, to make searching easier, if we start having 1000s may reconsider this...
             ForbiddenMerges.Add((id1, id2));
             ForbiddenMerges.Add((id2, id1));
 
@@ -120,12 +120,13 @@ namespace SubD.Builders
 
         public IDictionary<int, Surface> ToSurfaces(bool merge = true)
         {
+            PoorMansProfiler.Start("PopulateMergeStock");
             if (Dirty)
             {
-                PoorMansProfiler.Start("PopulateMergeStock");
                 PopulateMergeStock();
-                PoorMansProfiler.End("PopulateMergeStock");
             }
+            PoorMansProfiler.End("PopulateMergeStock");
+
             if (MergeStock.Count == 0)
             {
                 return null;
@@ -133,6 +134,7 @@ namespace SubD.Builders
 
             Dictionary<int, Surface> intermediate_merges = [];
 
+            PoorMansProfiler.Start("Merge Groups");
             foreach(int merge_group in MergeStock.Select(x => x.MergeGroup).Distinct())
             {
                 PoorMansProfiler.Start("DumbConcat");
@@ -162,20 +164,22 @@ namespace SubD.Builders
                 if (merge)
                 {
                     MergeFaces(surf);
-                    MergeEdges(surf);
-                    MergeVerts(surf);
+                    // MergeEdges(surf);
+                    // MergeVerts(surf);
                 }
 
-                PoorMansProfiler.Start("Debug");
-                surf.DebugValidate();
-                PoorMansProfiler.End("Debug");
+                // PoorMansProfiler.Start("Debug");
+                // surf.DebugValidate();
+                // PoorMansProfiler.End("Debug");
             }
+            PoorMansProfiler.End("Merge Groups");
 
             return intermediate_merges;
         }
 
         public Surface ToSurface(bool merge = true)
         {
+            PoorMansProfiler.Start("ToSurface");
             PoorMansProfiler.Start("ToSurfaces");
             IDictionary<int, Surface> intermediate_merges = ToSurfaces(merge);
             PoorMansProfiler.End("ToSurfaces");
@@ -200,6 +204,7 @@ namespace SubD.Builders
                 }
             }
             PoorMansProfiler.End("Concat");
+            PoorMansProfiler.End("ToSurface");
 
             return ret;
         }
@@ -214,7 +219,7 @@ namespace SubD.Builders
             {
                 Vert vert1 = verts[i];
 
-                if (!surf.Verts.Contains(vert1))
+                if (!surf.Verts.Contains(vert1.Key))
                 {
                     // gone in an earier merge
                     continue;
@@ -294,22 +299,30 @@ namespace SubD.Builders
 
         void MergeFaces(Surface surf)
         {
+            // we're going to need the spatial search capability to efficiently find
+            // faces to merge
+            surf.Faces.SpatialStatus = Godot_Util.CSharp_Util.SpatialStatus.Enabled;
+
             PoorMansProfiler.Start("MergeFaces");
+            PoorMansProfiler.Start("Build Face List");
             // the Faces collection on surf is going to lose some members during this process
             // so the easiest way that does not involve restarting loops is
             // to build a list now, let it go out of date, and
             List<Face> faces = [.. surf.Faces.Values];
+            PoorMansProfiler.End("Build Face List");
 
-            for(int i = 0; i < faces.Count - 1; i++)
+            PoorMansProfiler.Start("Loop");
+            foreach(Face face1 in faces)
             {
-                Face face1 = faces[i];
-
+                PoorMansProfiler.Start("Search");
                 ImBounds bounds = face1.GetBounds();
 
                 List<Face> matching_faces = [.. surf.Faces.FindValues(bounds, IReadOnlyRTree.SearchMode.ExactMatch)
                     .Where(x => x != face1)];
+                PoorMansProfiler.End("Search");
 
-                foreach(Face face2 in matching_faces)
+                PoorMansProfiler.Start("Inner Loop");
+                foreach (Face face2 in matching_faces)
                 {
                     if (!surf.Faces.Contains(face1))
                     {
@@ -333,7 +346,9 @@ namespace SubD.Builders
                     }
                     PoorMansProfiler.End("TargetCheck");
                 }
+                PoorMansProfiler.End("Inner Loop");
             }
+            PoorMansProfiler.End("Loop");
             PoorMansProfiler.End("MergeFaces");
         }
 
@@ -356,12 +371,17 @@ namespace SubD.Builders
             // - remove the leaving edge from the surface (should be no more references)
             // - remove its verts from the surface (should be no more references)
 
+            PoorMansProfiler.Start("Remove Faces");
             surf.RemoveAndRemoveReferences(face1);
             surf.RemoveAndRemoveReferences(face2);
+            PoorMansProfiler.End("Remove Faces");
 
+            PoorMansProfiler.Start("Pair Edges");
             // first we need to know which edges are equivalent
             List<(Edge edge1, Edge edge2)> paired_edges = PairEdges(face1.Edges, face2.Edges);
+            PoorMansProfiler.End("Pair Edges");
 
+            PoorMansProfiler.Start("Edge Merge Loop");
             foreach ((Edge leaving_edge, Edge remaining_edge) in paired_edges)
             {
                 // can this be the same operation as a general edge merge?
@@ -391,7 +411,9 @@ namespace SubD.Builders
                 //
                 if (leaving_edge != remaining_edge)
                 {
+                    PoorMansProfiler.Start("MergeEdgesWithFaceSpace");
                     MergeEdgesWithFaceSpace(surf, leaving_edge, remaining_edge);
+                    PoorMansProfiler.End("MergeEdgesWithFaceSpace");
                 }
                 else
                 {
@@ -413,17 +435,20 @@ namespace SubD.Builders
                         leaving_edge.Start.Edges.Remove(leaving_edge);
                         leaving_edge.End.Edges.Remove(leaving_edge);
 
-                        surf.Edges.Remove(leaving_edge.Key);
+                        surf.Edges.Remove(leaving_edge);
                     }
                 }
             }
+            PoorMansProfiler.End("Edge Merge Loop");
 
+            PoorMansProfiler.Start("Cleanup");
             // because of the order we paired them up in, and the second edge argument of MergeEdgesWithFaceSpace
             // being the "remaining" edge, the verts of face2 are the ones potentially still in use and the verts of face1 the
             // discarded ones *HOWEVER* a vert of face2 may not now have any faces left (if face1/face2 were all it had)
 
             // if we need to split any verts, we'll modify the vert on face2,
             // so take a copy for iteration
+            PoorMansProfiler.Start("Sort");
             Vert[] remaining_verts = face2.Verts.Where(x => x.Faces.Any()).ToArray();
             foreach(Vert vert in remaining_verts)
             {
@@ -431,39 +456,44 @@ namespace SubD.Builders
                 // verts, sort them back into the correct order...
                 VertUtil.SortVertEdgesAndFaces(surf, vert, true);
             }
+            PoorMansProfiler.End("Sort");
 
             // and the verts which are not still required, are the union of the verts from the two faces
             // *minus* the ones in remaining_verts
             //
             // (any new verts added by splitting in SortVertEdgesAndFaces are a) definitely in use and b) not in either
             // face, so they won't feature here anyway...)
+            PoorMansProfiler.Start("Remove");
             foreach(Vert vert in face1.Verts.Concat(face2.Verts).Where(x => !remaining_verts.Contains(x)).Distinct())
             {
                 // check it is not still referenced by any edge/face
-                Util.Assert(!surf.Edges.Values.SelectMany(x => x.Verts).Distinct().Contains(vert));
-                Util.Assert(!surf.Faces.Values.SelectMany(x => x.Verts).Distinct().Contains(vert));
+                // Util.Assert(!surf.Edges.Values.SelectMany(x => x.Verts).Distinct().Contains(vert));
+                // Util.Assert(!surf.Faces.Values.SelectMany(x => x.Verts).Distinct().Contains(vert));
 
-                surf.Verts.Remove(vert.Key);
+                surf.Verts.Remove(vert);
             }
+            PoorMansProfiler.End("Remove");
+            PoorMansProfiler.End("Cleanup");
 
-#if DEBUG
-            foreach((Edge leaving_edge, Edge remaining_edge) in paired_edges)
-            {
-                if (leaving_edge != remaining_edge)
-                {
-                    // edge1 is the
-                    Util.Assert(!surf.Edges.Contains(leaving_edge));
-                    Util.Assert(!surf.Verts.Values.SelectMany(x => x.Edges).Distinct().Contains(leaving_edge));
-                    Util.Assert(!surf.Faces.Values.SelectMany(x => x.Edges).Distinct().Contains(leaving_edge));
-                }
-            }
+//             PoorMansProfiler.Start("Debug");
+// #if DEBUG
+//             foreach((Edge leaving_edge, Edge remaining_edge) in paired_edges)
+//             {
+//                 if (leaving_edge != remaining_edge)
+//                 {
+//                     Util.Assert(!surf.Edges.Contains(leaving_edge));
+//                     Util.Assert(!surf.Verts.Values.SelectMany(x => x.Edges).Distinct().Contains(leaving_edge));
+//                     Util.Assert(!surf.Faces.Values.SelectMany(x => x.Edges).Distinct().Contains(leaving_edge));
+//                 }
+//             }
 
-            Util.Assert(!surf.Faces.Values.Concat(surf.Verts.Values.SelectMany(x => x.Faces)).Distinct().Concat(surf.Edges.Values.SelectMany(x => x.Faces)).Distinct().Contains(face1));
-            Util.Assert(!surf.Faces.Values.Concat(surf.Verts.Values.SelectMany(x => x.Faces)).Distinct().Concat(surf.Edges.Values.SelectMany(x => x.Faces)).Distinct().Contains(face1));
-#endif
+//             Util.Assert(!surf.Faces.Values.Concat(surf.Verts.Values.SelectMany(x => x.Faces)).Distinct().Concat(surf.Edges.Values.SelectMany(x => x.Faces)).Distinct().Contains(face1));
+//             Util.Assert(!surf.Faces.Values.Concat(surf.Verts.Values.SelectMany(x => x.Faces)).Distinct().Concat(surf.Edges.Values.SelectMany(x => x.Faces)).Distinct().Contains(face1));
+// #endif
 
-            // should be a good surface again now...
-            surf.DebugValidate();
+//             // should be a good surface again now...
+//             surf.DebugValidate();
+//             PoorMansProfiler.End("Debug");
         }
 
         private void MergeEdgesWithFaceSpace(Surface surf, Edge leaving, Edge remaining)
@@ -488,6 +518,7 @@ namespace SubD.Builders
             Vert remaining_vert1;
             Vert remaining_vert2;
 
+            PoorMansProfiler.Start("Match Verts");
             if (OrthoDist(leaving_vert1, remaining.Start) < OrthoDist(leaving_vert1, remaining.End))
             {
                 remaining_vert1 = remaining.Start;
@@ -498,16 +529,22 @@ namespace SubD.Builders
                 remaining_vert1 = remaining.End;
                 remaining_vert2 = remaining.Start;
             }
+            PoorMansProfiler.End("Match Verts");
 
+            PoorMansProfiler.Start("Swap Verts");
             VertUtil.SwapVertReferences(leaving_vert1, remaining_vert1, leaving_vert1);
             VertUtil.SwapVertReferences(leaving_vert2, remaining_vert2, leaving_vert2);
+            PoorMansProfiler.End("Swap Verts");
 
+            PoorMansProfiler.Start("Concat");
             remaining_vert1.Edges = [.. remaining_vert1.Edges.Concat(leaving_vert1.Edges).Distinct().Where(x => x != leaving)];
             remaining_vert1.Faces = [.. remaining_vert1.Faces.Concat(leaving_vert1.Faces).Distinct()];
 
             remaining_vert2.Edges = [.. remaining_vert2.Edges.Concat(leaving_vert2.Edges).Distinct().Where(x => x != leaving)];
             remaining_vert2.Faces = [.. remaining_vert2.Faces.Concat(leaving_vert2.Faces).Distinct()];
+            PoorMansProfiler.End("Concat");
 
+            PoorMansProfiler.Start("Face Swap");
             Face moving_face = leaving.Forwards ?? leaving.Backwards;
 
             if (remaining.Forwards == null)
@@ -518,12 +555,17 @@ namespace SubD.Builders
             {
                 remaining.Backwards = moving_face;
             }
+            PoorMansProfiler.End("Face Swap");
 
+            PoorMansProfiler.Start("Edge Swap");
             moving_face.Edges = [.. moving_face.Edges.Select(x => x == leaving ? remaining : x)];
+            PoorMansProfiler.End("Edge Swap");
 
-            // we can clear the edges up now, but the verts may still be in use by another edge
+            PoorMansProfiler.Start("Remove Edge");
+            // we can clean the edges up now, but the verts may still be in use by another edge
             // we are about to remove, so better to do that after we get out of the loop calling this
-            surf.Edges.Remove(leaving.Key);
+            surf.Edges.Remove(leaving);
+            PoorMansProfiler.End("Remove Edge");
 
             static float OrthoDist(Vert v1, Vert v2)
             {
