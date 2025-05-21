@@ -7,8 +7,6 @@ using Godot;
 using Godot_Util;
 
 using Geom_Util;
-using Geom_Util.Interfaces;
-using Godot_Util.CSharp_Util;
 
 namespace SubD
 {

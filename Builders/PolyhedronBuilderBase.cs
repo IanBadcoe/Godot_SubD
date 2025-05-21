@@ -301,7 +301,7 @@ namespace SubD.Builders
         {
             // we're going to need the spatial search capability to efficiently find
             // faces to merge
-            surf.Faces.SpatialStatus = Godot_Util.CSharp_Util.SpatialStatus.Enabled;
+            surf.Faces.SpatialStatus = SpatialStatus.Enabled;
 
             PoorMansProfiler.Start("MergeFaces");
             PoorMansProfiler.Start("Build Face List");
