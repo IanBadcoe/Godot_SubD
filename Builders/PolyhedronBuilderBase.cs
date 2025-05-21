@@ -7,8 +7,9 @@ using System.Linq;
 using Godot;
 
 using Godot_Util;
-using System.Data;
+
 using Geom_Util;
+using Geom_Util.Immutable;
 
 namespace SubD.Builders
 {
@@ -213,7 +214,7 @@ namespace SubD.Builders
         {
             // not sure if I need this
             // if I do, redo via RTree search in inner loop
-            List<Vert> verts = surf.Verts.Values.ToList();
+            List<Vert> verts = [.. surf.Verts.Values];
 
             for(int i = 0; i < verts.Count - 1; i++)
             {
@@ -449,7 +450,7 @@ namespace SubD.Builders
             // if we need to split any verts, we'll modify the vert on face2,
             // so take a copy for iteration
             PoorMansProfiler.Start("Sort");
-            Vert[] remaining_verts = face2.Verts.Where(x => x.Faces.Any()).ToArray();
+            Vert[] remaining_verts = [.. face2.Verts.Where(x => x.Faces.Any())];
             foreach(Vert vert in remaining_verts)
             {
                 // we messed with the edges are faces on these

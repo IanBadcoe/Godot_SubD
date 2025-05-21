@@ -9,6 +9,7 @@ using Godot;
 using Godot_Util;
 
 using Geom_Util;
+using Geom_Util.Immutable;
 
 namespace SubD.Builders;
 
@@ -29,7 +30,7 @@ public class BuildFromCylinders
 
     public ReadOnlyCollection<CylSection> Sections
     {
-        get => new ReadOnlyCollection<CylSection>(SectionsInner.Values.ToList());
+        get => new ReadOnlyCollection<CylSection>([.. SectionsInner.Values]);
     }
 
     // Surface building
@@ -526,7 +527,7 @@ public class BuildFromCylinders
         {
             // when we reverse everything, the vert *before* the edge becomes the vert *after* the edge
             // meaning the sharpnesses are out-by-one
-            edge_sharpnesses = edge_sharpnesses.Skip(1).Concat(edge_sharpnesses.Take(1)).Reverse().ToList();
+            edge_sharpnesses = [.. edge_sharpnesses.Skip(1).Concat(edge_sharpnesses.Take(1)).Reverse()];
 
             verts = verts.Reverse();
         }
@@ -538,7 +539,7 @@ public class BuildFromCylinders
 
         // sub_sector here locked to 0 because we never do anything complex for end-caps
         AddFace(
-            face.ToList(), f_props,
+            [.. face], f_props,
             sect.SectionIdx, sect.SectionIdx,
             -1, 0,
             loop.Topology,
@@ -685,7 +686,7 @@ public class BuildFromCylinders
         // we need two clearances and at least a tiny space for the hole...
         float c2 = clearance * clearance * 2.1f;
 
-        Vert[] verts = face.Verts.ToArray();
+        Vert[] verts = [.. face.Verts];
 
         List<Vector3> dirs = [];
 
