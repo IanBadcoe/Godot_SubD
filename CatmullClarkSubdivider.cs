@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using Godot;
 
 using Godot_Util;
-using Godot_Util.CSharp_Util;
 
 using Geom_Util;
 
@@ -58,7 +57,7 @@ namespace SubD
             Dictionary<Face, Vert> face_centre_map = [];
 
             // inject face centre verts
-            foreach(Face face in input.Faces.Values)
+            foreach (Face face in input.Faces.Values)
             {
                 VIdx v_idx = new(NextVIdx++);
                 Vert vert = new(face.Centre);
@@ -70,7 +69,7 @@ namespace SubD
             Dictionary<Edge, Vert> edge_centre_map = [];
 
             // inject edge centre verts
-            foreach(var edge in input.Edges.Values)
+            foreach (var edge in input.Edges.Values)
             {
                 VIdx v_idx = new(NextVIdx++);
                 Vert vert = null;
@@ -91,9 +90,9 @@ namespace SubD
                     vert = new Vert(
                         (
                                edge.Start.Position
-                            +  edge.End.Position
-                            +  face_centre_map[edge.Backwards].Position
-                            +  face_centre_map[edge.Forwards].Position
+                            + edge.End.Position
+                            + face_centre_map[edge.Backwards].Position
+                            + face_centre_map[edge.Forwards].Position
                         ) / 4);
                 }
 
@@ -103,7 +102,7 @@ namespace SubD
             }
 
             // move pre-existing verts
-            foreach(var pair in input.Verts)
+            foreach (var pair in input.Verts)
             {
                 Vert input_vert = pair.Value;
                 VIdx input_v_idx = pair.Key;
@@ -164,12 +163,12 @@ namespace SubD
 
             Dictionary<(Vert, Vert), Edge> made_edges = [];
 
-            foreach(var p_pair in input.Faces)
+            foreach (var p_pair in input.Faces)
             {
                 Face face = p_pair.Value;
                 Edge prev_edge = face.Edges.Last();
 
-                foreach(Edge edge in face.Edges)
+                foreach (Edge edge in face.Edges)
                 {
                     // if we used this edge backwards, then we need to start at the End
                     // otherwise the Start
@@ -191,7 +190,7 @@ namespace SubD
                 }
             }
 
-            foreach(Vert vert in NewVerts.Values)
+            foreach (Vert vert in NewVerts.Values)
             {
                 // we added the edges and faces to the verts in a fairly arbitraty order, but we need
                 // them to both be clockwise, from outside the cube, looking inwards, and...
@@ -224,7 +223,7 @@ namespace SubD
             List<Edge> backwards_edges = [];
             List<Edge> forwards_edges = [];
 
-            for(int i = 0; i < v_idxs.Length; i++)
+            for (int i = 0; i < v_idxs.Length; i++)
             {
                 AnnotatedVert av = v_idxs[i];
                 int next_i = (i + 1) % v_idxs.Length;
@@ -244,17 +243,17 @@ namespace SubD
             face.SetMetadataFrom(orig_face);
 
             // it's a new face, so let all the verts know
-            foreach(Vert vert in face.Verts)
+            foreach (Vert vert in face.Verts)
             {
                 vert.Faces.Add(face);
             }
 
-            foreach(Edge edge in backwards_edges)
+            foreach (Edge edge in backwards_edges)
             {
                 edge.Backwards = face;
             }
 
-            foreach(Edge edge in forwards_edges)
+            foreach (Edge edge in forwards_edges)
             {
                 edge.Forwards = face;
             }
@@ -295,7 +294,7 @@ namespace SubD
         {
             SpatialDictionary<VIdx, Vert> ret = new(spatial_status);
 
-            foreach(var pair in verts)
+            foreach (var pair in verts)
             {
                 ret[pair.Key] = pair.Value.Clone(true);
             }
