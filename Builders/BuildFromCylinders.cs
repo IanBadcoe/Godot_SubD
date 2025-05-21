@@ -52,7 +52,7 @@ namespace SubD.Builders
 
             NewVerts = [];
             NewEdges = [];
-            NewFaces = []];
+            NewFaces = [];
 
             FaceMap = [];
         }

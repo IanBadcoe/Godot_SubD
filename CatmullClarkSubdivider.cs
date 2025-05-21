@@ -30,9 +30,9 @@ namespace SubD
 
     public class CatmullClarkSubdivider : ISubdivider
     {
-        int NextVertIdx;
-        int NextEdgeIdx;
-        int NextFaceIdx;
+        int NextVIdx;
+        int NextEIdx;
+        int NextFIdx;
 
         SpatialDictionary<VIdx, Vert> NewVerts;
         SpatialDictionary<EIdx, Edge> NewEdges;
@@ -45,22 +45,22 @@ namespace SubD
                 return null;
             }
 
-            NextVertIdx = input.Verts.Keys.Max().Value + 1;     // retain all existing idxs and build new ones beyond that range
-            NextEdgeIdx = 0;                                    // no edges are carried over
-            NextFaceIdx = 0;                                    // no faces are carried over
+            NextVIdx = input.NextVIdx;  // retain all existing idxs and build new ones beyond that range
+            NextEIdx = 0;               // no edges are carried over
+            NextFIdx = 0;               // no faces are carried over
 
             // preserve the VIds of existing verts
             // all cloned verts are unfrozen and do not have cached Normals
-            NewVerts = CloneVerts(input.Verts, SpatialStatus.Disabled);       // we don't need "IsSpatialEnabled", let whoever does need it turn it on
-            NewEdges = [];                           // we don't need "IsSpatialEnabled", let whoever does need it turn it on
-            NewFaces = [];
+            NewVerts = CloneVerts(input.Verts, SpatialStatus.Disabled);         // \
+            NewEdges = [];                                                      //  > we don't need "IsSpatialEnabled", we can let whoever does need it turn it on
+            NewFaces = [];                                                      // /
 
             Dictionary<Face, Vert> face_centre_map = [];
 
             // inject face centre verts
             foreach(Face face in input.Faces.Values)
             {
-                VIdx v_idx = new(NextVertIdx++);
+                VIdx v_idx = new(NextVIdx++);
                 Vert vert = new(face.Centre);
                 NewVerts[v_idx] = vert;
 
@@ -72,7 +72,7 @@ namespace SubD
             // inject edge centre verts
             foreach(var edge in input.Edges.Values)
             {
-                VIdx v_idx = new(NextVertIdx++);
+                VIdx v_idx = new(NextVIdx++);
                 Vert vert = null;
 
                 if (edge.IsSetSharp)
@@ -211,7 +211,7 @@ namespace SubD
 
         void Reset()
         {
-            NextEdgeIdx = NextFaceIdx = NextVertIdx = 0;
+            NextEIdx = NextFIdx = NextVIdx = 0;
 
             NewVerts = null;
             NewEdges = null;
@@ -239,7 +239,7 @@ namespace SubD
             }
 
             Face face = new(v_idxs.Select(x => x.Vert), edges, orig_face.GIs);
-            FIdx f_idx = new(NextFaceIdx++);
+            FIdx f_idx = new(NextFIdx++);
             NewFaces[f_idx] = face;
             face.SetMetadataFrom(orig_face);
 
@@ -271,7 +271,7 @@ namespace SubD
 
             is_backwards = false;
 
-            EIdx e_idx = new(NextEdgeIdx++);
+            EIdx e_idx = new(NextEIdx++);
 
             edge = new(start.Vert, end.Vert);
 

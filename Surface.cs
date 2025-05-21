@@ -21,7 +21,7 @@ namespace SubD
     [DebuggerDisplay("Verts = Vert.Count, Edges = Edge.Count, Faces = Face.Count")]
     public partial class Surface : IBounded
     {
-        public class OutVert
+        class OutVert
         {
             public Vert Vert;
             public Vector3 Normal;
@@ -54,9 +54,9 @@ namespace SubD
         // mesh output workings, clear after each ToSurface
         Dictionary<VIdx, Dictionary<FIdx, OutVert>> OutVerts = [];
 
-        int NextVIdx = 0;
-        int NextEIdx = 0;
-        int NextFIdx = 0;
+        public int NextVIdx { get; private set; } = 0;
+        public int NextEIdx { get; private set; } = 0;
+        public int NextFIdx { get; private set; } = 0;
 
         public Vector3 FaceNormal(Face face)
         {
