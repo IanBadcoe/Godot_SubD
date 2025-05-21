@@ -1,7 +1,8 @@
-namespace SubD
+using Geom_Util;
+
+namespace SubD.Interfaces;
+
+public interface ISubdivider
 {
-    public interface ISubdivider
-    {
-        Surface Subdivide(Surface input);
-    }
+    Surface Subdivide(Surface input);
 }

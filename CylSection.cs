@@ -4,7 +4,7 @@ namespace SubD
 {
     using CylTypes;
 
-    using SectionIdx = Idx<CylSection>;
+    using SectionIdx = Geom_Util.Idx<CylSection>;
 
     using VertPropsFunc = System.Func<CylSection, int, CylTypes.Topology, CylTypes.VertProps>;
     using EdgePropsFunc = System.Func<CylSection, int, CylTypes.Topology, CylTypes.EdgeType, CylTypes.EdgeProps>;
